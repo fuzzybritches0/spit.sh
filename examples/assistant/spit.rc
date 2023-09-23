@@ -6,7 +6,7 @@ PROMPT_TEMPLATE="llama2"
 #DEBUG=1
 INTERACTIVE=1
 
-PROG=("${HOME}/llama.cpp/main"
+PROG=("./main"
 --ctx_size 4096
 --keep -1
 --batch-size 512
@@ -17,4 +17,4 @@ PROG=("${HOME}/llama.cpp/main"
 --top_p 0.5
 --threads 12
 --logdir log
---model "../../gguf/llama-2-13b-chat.Q8_0.gguf")
+--model "./llama-2-13b-chat.Q8_0.gguf")
