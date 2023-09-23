@@ -1,0 +1,20 @@
+USER_NAME="User"
+AI_NAME="Assistant"
+
+PROMPT_TEMPLATE="llama2"
+
+#DEBUG=1
+INTERACTIVE=1
+
+PROG=("${HOME}/llama.cpp/main"
+--ctx_size 4096
+--keep -1
+--batch-size 512
+--repeat_last_n 512
+--repeat_penalty 1.17647
+--temp 0.8
+--top_k 40
+--top_p 0.5
+--threads 12
+--logdir log
+--model "../../gguf/llama-2-13b-chat.Q8_0.gguf")
