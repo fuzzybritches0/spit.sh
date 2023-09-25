@@ -45,7 +45,7 @@ prompt_template() {
 		SYS_START="[INST] <<SYS>> "
 		SYS_END=" <</SYS>>\n\n"
 		INST_START_NEXT="[INST] "
-		INST_END=" [/INST]"
+		INST_END=" [/INST] "
 	fi
 }
 
