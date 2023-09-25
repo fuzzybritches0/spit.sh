@@ -50,6 +50,9 @@ prompt_template() {
 }
 
 init_prompt() {
+	echo -ne "${SYS_START}" >> ./${ID}/prompt
+	echo -n "${SYSTEM}" >> ./${ID}/prompt
+	echo -ne "${SYS_END}" >> ./${ID}/prompt
 	while true; do
 		[ ! "${CHAT[${COUNT}]}" ] && break
 		echo -ne "${INST_START}" >> ./${ID}/prompt
@@ -60,9 +63,6 @@ init_prompt() {
 		echo -ne "${CHAT[${COUNT}]}" >> ./${ID}/prompt
 		((COUNT+=1))
 	done
-	echo -ne "${SYS_START}" >> ./${ID}/prompt
-	echo -n "${SYSTEM}" >> ./${ID}/prompt
-	echo -ne "${SYS_END}" >> ./${ID}/prompt
 }
 
 llamacpp_fix() {
