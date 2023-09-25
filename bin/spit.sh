@@ -211,7 +211,7 @@ ID="$(return_1 ${1})"
 ID="$(basename ${ID})"
 
 [ ! -d "./${ID}" ] && mkdir ./${ID}
-[ ! -d "./${ID}/logs" ] && mkdir ./${ID}
+[ ! -d "./${ID}/logs" ] && mkdir ./${ID}/logs
 [ ! -f "./${ID}/cache" ] && cp ./cache ./${ID}/cache
 [ ! -f "./${ID}/prompt" ] && cp ./prompt ./${ID}/prompt
 [ ! -f "./${ID}/prompt_full" ] && touch ./${ID}/prompt_full
