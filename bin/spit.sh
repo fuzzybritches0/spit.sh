@@ -72,7 +72,11 @@ llamacpp_fix() {
 
 display_chat() {
 	[ ! "${DEBUG}" ] && clear
-	cat ./system | format_chat
+	if [ ! "${INTRO}" ]; then
+		cat ./system | format_chat
+	else
+		echo "${INTRO}" | format_chat
+	fi
 	cat ./${ID}/prompt_full | format_chat
 }
 
