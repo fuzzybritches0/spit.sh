@@ -53,6 +53,7 @@ init_prompt() {
 	echo -ne "${SYS_START}" >> ./${ID}/prompt
 	echo -n "${SYSTEM}" >> ./${ID}/prompt
 	echo -ne "${SYS_END}" >> ./${ID}/prompt
+	COUNT=0
 	while true; do
 		[ ! "${CHAT[${COUNT}]}" ] && break
 		echo -ne "${INST_START}" >> ./${ID}/prompt
