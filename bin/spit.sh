@@ -112,7 +112,6 @@ tokens_gen() {
 jump_n() {
 	PROMPT="$(cat ./${ID}/prompt)"
 	JUMP=${#PROMPT}
-	((JUMP+=1))
 }
 
 spit_predict() {
