@@ -50,6 +50,16 @@ prompt_template() {
 }
 
 init_prompt() {
+	while true; do
+		[ ! "${CHAT[${COUNT}]}" ] && break
+		echo -ne "${INST_START}" >> ./${ID}/prompt
+		echo -ne "${CHAT[${COUNT}]}" >> ./${ID}/prompt
+		((COUNT+=1))
+		[ "${INST_START_NEXT}" ] && INST_START="${INST_START_NEXT}"
+		echo -ne "${INST_END}" >> ./${ID}/prompt
+		echo -ne "${CHAT[${COUNT}]}" >> ./${ID}/prompt
+		((COUNT+=1))
+	done
 	echo -ne "${SYS_START}" >> ./${ID}/prompt
 	echo -n "${SYSTEM}" >> ./${ID}/prompt
 	echo -ne "${SYS_END}" >> ./${ID}/prompt
@@ -203,11 +213,13 @@ context_size
 tokens_predict
 [ ! "${NO_TOKENS_GEN}" ] && tokens_gen
 
-if [ "${PROMPT_TEMPLATE}" == "llama2" ]; then
+if [ "${PROMPT_TEMPLATE}" == "llama2" ] && [ ! "${CHAT}" ]; then
 	P1="$(cat ./prompt)"
 	P2="$(cat ./${ID}/prompt)"
 	[ "${#P1}" -ne "${#P2}" ] && INST_START="${INST_START_NEXT}"
 fi
+
+[ "${PROMPT_TEMPLATE}" == "llama2" ] && [ "${CHAT}" ] && INST_START="${INST_START_NEXT}"
 
 while true; do
 	if [ "${INTERACTIVE}" ]; then
