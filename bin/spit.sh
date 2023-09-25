@@ -142,6 +142,7 @@ spit_predict() {
 	fi
 	cp ./${ID}/prompt_next ./${ID}/prompt
 	llamacpp_fix
+	mv ./main.*.log ./${ID}/logs/
 	tokens_predict
 	tokens_gen
 }
@@ -157,6 +158,7 @@ spit_cache() {
 		"${PROG[@]}" --prompt-cache ./${ID}/cache --file ./${ID}/prompt \
 			--n_predict 1 2> ./${ID}/log > /dev/null
 	fi
+	[ "${ID}" ] && mv ./main.*.log ./${ID}/logs/
 	context_size
 	tokens_predict
 	tokens_gen
@@ -208,6 +210,7 @@ ID="$(return_1 ${1})"
 ID="$(basename ${ID})"
 
 [ ! -d "./${ID}" ] && mkdir ./${ID}
+[ ! -d "./${ID}/logs" ] && mkdir ./${ID}
 [ ! -f "./${ID}/cache" ] && cp ./cache ./${ID}/cache
 [ ! -f "./${ID}/prompt" ] && cp ./prompt ./${ID}/prompt
 [ ! -f "./${ID}/prompt_full" ] && touch ./${ID}/prompt_full
