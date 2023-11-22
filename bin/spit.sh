@@ -178,17 +178,6 @@ spit_cache() {
 	get_tokens_generated
 }
 
-shift_prompt() {
-	FULL="$(cat ./${ID}/prompt | wc -l)"
-	SYSPROMPT="$(cat ./system | wc -l)"
-	((SYSPROMPT=+2))
-	((HALF-=SYSPROMPT))
-	((HALF=FULL/2))
-	PROMPT="$(tail -n ${HALF} ./${ID}/prompt)"
-	init_prompt
-	echo -n "${PROMPT}" >> ./${ID}/prompt
-}
-
 [ "${1}" == "help" ] || [ "${1}" == "-h" ] || [ "${1}" == "--help" ] && \
 	help_screen && exit 0
 
@@ -252,35 +241,46 @@ while true; do
 	elif [ -f "./${ID}/input" ]; then
 		INPUT="$(cat ./${ID}/input)"
 	fi
-	[ ! "${INPUT}" ] && exit 0
-	echo -ne "${INST_START}" >> ./${ID}/prompt
-	echo -n "${INPUT}" >> ./${ID}/prompt
-	echo -ne "${INST_END}" >> ./${ID}/prompt
-	echo "${USER_NAME}: ${INPUT}" >> ./${ID}/prompt_full
-	[ "${INTERACTIVE}" ] && echo -n "${AI_NAME}:"
 
-	cp ./${ID}/prompt ./${ID}/prompt_last
+	[ ! "${INPUT}" ] && exit 0
+
+	save_input
+
+	spit_cache
+	if [ "$(cat ./${ID}/log | grep "prompt is too long")" ]; then
+		cp ./${ID}/prompt_last ./${ID}/prompt
+		exit_fail "prompt is too long!" 2
+	fi
+
+	[ "${INTERACTIVE}" ] && echo -n "${AI_NAME}:"
+	echo -n "${AI_NAME}:" >> ./${ID}/prompt_full
+
+	echo -n > ./${ID}/output
 
 	while true; do
+		cp ./${ID}/prompt ./${ID}/prompt_last
 		spit_predict
-		if [ "$(cat ./${ID}/log | grep "prompt is too long")" ]; then
-			cp ./${ID}/prompt_last ./${ID}/prompt
-			shift_prompt
-			spit_cache
-		elif [ "${PREDICT}" -eq "0" ] && [ ! "$(cat ./${ID}/log | grep "[end of text]")" ]; then
-			shift_prompt
-			spit_cache
-		else
+		save_output
+		if [ "${PREDICT}" -eq "0" ] && [ ! "$(cat ./${ID}/log | grep "[end of text]")" ]; then
+			exit_fail "reached maximum length!" 2
+		elif [ "$(remove_eos_token)" ]; then
+			break
+		elif [ ! "$(detect_stop_sequence)" ]; then
 			break
 		fi
 	done
 
-	PROMPT="$(cat ./${ID}/prompt)"
-	PROMPT_LAST="$(cat ./${ID}/prompt_last)"
-	((CUT_OFFSET=${#PROMPT}-${#PROMPT_LAST}))
-	PREDICTED="${PROMPT:${#PROMPT_LAST}:${CUT_OFFSET}}"
-	echo "${PREDICTED}" > ./${ID}/predicted
-	echo "${AI_NAME}:${PREDICTED}" >> ./${ID}/prompt_full
+	cat ./${ID}/output >> ./${ID}/prompt_full
+
+	((LAST_CHAR=${#PREDICTED}-1))
+	if [ "${PREDICTED:${LAST_CHAR}}" != "$(echo -e \n)" ]; then
+		echo >> ./${ID}/prompt_full
+		echo
+	fi
+
+
+	echo -ne "${REPL_END}" >> ./${ID}/prompt
+
 	[ ! "${INTERACTIVE}" ] && echo && break
 
 	[ "${INST_START_NEXT}" ] && INST_START="${INST_START_NEXT}" && INST_START_NEXT=
