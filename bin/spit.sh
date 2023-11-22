@@ -61,6 +61,21 @@ save_input() {
 	echo -e  "${USER_NAME}: ${INPUT}\n" >> ./${ID}/prompt_full
 }
 
+get_predicted() {
+	PROMPT="$(cat ./${ID}/prompt)"
+	PROMPT_LAST="$(cat ./${ID}/prompt_last)"
+	((PROMPT_OFFSET=${#PROMPT_LAST}-${JUMP_OFFSET}))
+	PREDICTED="${PROMPT:${PROMPT_OFFSET}}"
+}
+
+save_output() {
+	get_predicted
+	echo -n "${PREDICTED}" > ./${ID}/predicted
+	[ "${DEBUG}" ] && cp ./${ID}/prompt ./${ID}/prompt_raw
+	cat ./${ID}/prompt_last ./${ID}/predicted > ./${ID}/prompt
+	cat ./${ID}/predicted >> ./${ID}/output
+}
+
 init_prompt_chat() {
 	COUNT=0
 	while true; do
