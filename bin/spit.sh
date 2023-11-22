@@ -201,6 +201,53 @@ spit_cache() {
 	get_tokens_generated
 }
 
+process_stop_sequence() {
+	SEQ="$(detect_stop_sequence)"
+	if [ "${SEQ}" ]; then
+		SEQ_START="[${SEQ}]"
+		SEQ_STOP="[/${SEQ}]"
+		((STEPS=${#PREDICTED}-${#SEQ_START}))
+		for STEP in $(seq ${STEPS} -1 0); do
+			((OFFSETL=STEP+${#SEQ_START}))
+			((OFFSETR=${#PREDICTED}-${OFFSETL}-${#SEQ_STOP}))
+			if [ "${PREDICTED:${STEP}:${#SEQ_START}}" == "${SEQ_START}" ]; then
+				EXEC="${PREDICTED:${OFFSETL}:${OFFSETR}}"
+				break
+			fi
+		done
+		"${SEQ}" "${EXEC}" | tee -a ./${ID}/prompt ./${ID}/output
+	fi
+}
+
+stop_on_sequences() {
+	for EACH in ${STOP_SEQUENCES[@]}; do
+		REV_PROMPTS=(${REV_PROMPTS[@]} --reverse-prompt "[/${EACH}]")
+	done
+}
+
+detect_stop_sequence() {
+	for EACH in ${STOP_SEQUENCES[@]}; do
+		_EACH="[/${EACH}]"
+		((OFFSET=${#PROMPT}-${#_EACH}))
+		if [ "${PROMPT:${OFFSET}:${#_EACH}}" == "${_EACH}" ]; then
+			echo "${EACH}"
+		fi
+	done
+}
+
+stop_on_eos_token() {
+	REV_PROMPTS=(${REV_PROMPTS[@]} --reverse-prompt ${EOS})
+}
+
+remove_eos_token() {
+	PROMPT="$(cat ./${ID}/prompt)"
+	((OFFSET=${#PROMPT}-${#EOS}))
+	if [ "${PROMPT:${OFFSET}:${#EOS}}" == "${EOS}" ]; then
+		echo -n "${PROMPT:0:${OFFSET}}" > ./${ID}/prompt
+		echo "${EOS}"
+	fi
+}
+
 [ "${1}" == "help" ] || [ "${1}" == "-h" ] || [ "${1}" == "--help" ] && \
 	help_screen && exit 0
 
