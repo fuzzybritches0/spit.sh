@@ -126,6 +126,17 @@ get_tokens_generated() {
 	((PREDICT-=(TOK_GEN_1+TOK_GEN2)))
 }
 
+jump_offset_fix_resume() {
+	if [ "${JUMP_OFFSET_1}" ]; then
+		CON_COUNT="$(cat ./1/prompt | grep -o "$(echo -ne ${REPL_START})" | wc -l)"
+		((JUMP_OFFSET+=JUMP_OFFSET_1 * CON_COUNT))
+	fi
+}
+
+jump_offset_fix() {
+	((JUMP_OFFSET+=JUMP_OFFSET_1))
+}
+
 jump_n() {
 	PROMPT="$(cat ./${ID}/prompt)"
 	JUMP=${#PROMPT}
@@ -229,6 +240,8 @@ fi
 
 [ "${INST_START_NEXT}" ] && [ "${CHAT}" ] && INST_START="${INST_START_NEXT}"
 
+jump_offset_fix_resume
+
 [ ! "${DEBUG}" ] && [ "${INTERACTIVE}" ] && display_chat
 
 while true; do
@@ -271,4 +284,6 @@ while true; do
 	[ ! "${INTERACTIVE}" ] && echo && break
 
 	[ "${INST_START_NEXT}" ] && INST_START="${INST_START_NEXT}" && INST_START_NEXT=
+
+	jump_offset_fix
 done
