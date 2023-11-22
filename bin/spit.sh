@@ -40,6 +40,19 @@ exit_fail() {
 	exit ${2}
 }
 
+read_input() {
+	echo
+	echo -n "${USER_NAME} (${PREDICT}): "
+	if [ "${TEST[${TCOUNT}]}" ]; then
+		echo "${TEST[${TCOUNT}]}"
+		INPUT="${TEST[${TCOUNT}]}"
+		((TCOUNT++))
+	else
+		read INPUT
+	fi
+	echo
+}
+
 init_prompt_chat() {
 	COUNT=0
 	while true; do
@@ -71,13 +84,13 @@ llamacpp_fix() {
 }
 
 display_chat() {
-	[ ! "${DEBUG}" ] && clear
 	if [ ! "${INTRO}" ]; then
-		cat ./system | format_chat
+		echo "${SYSTEM}"
+		init_prompt_chat
 	else
-		echo "${INTRO}" | format_chat
+		echo "${INTRO}"
 	fi
-	cat ./${ID}/prompt_full | format_chat
+	cat ./${ID}/prompt_full
 }
 
 to_screen() {
@@ -226,11 +239,11 @@ fi
 
 [ "${INST_START_NEXT}" ] && [ "${CHAT}" ] && INST_START="${INST_START_NEXT}"
 
+[ ! "${DEBUG}" ] && [ "${INTERACTIVE}" ] && display_chat
+
 while true; do
 	if [ "${INTERACTIVE}" ]; then
-		display_chat
-		echo -n "${USER_NAME} (${PREDICT}): "
-		read INPUT
+		read_input
 	elif [ "${2}" ]; then
 		INPUT="${2}"
 	elif [ -f "./${ID}/input" ]; then
