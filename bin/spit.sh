@@ -163,13 +163,13 @@ spit_predict() {
 
 spit_cache() {
 	if [ "${DEBUG}" ]; then
-		"${PROG[@]}" --prompt-cache ./${ID}/cache --file ./${ID}/prompt \
+		"${PROG[@]}" --prompt-cache ./${ID}/cache --prompt-cache-all --file ./${ID}/prompt \
 			--n_predict 1 2> ./${ID}/log
 		echo
 		echo "EXIT WITH: ${PIPESTATUS[0]}"
 		cat ./${ID}/log
 	else
-		"${PROG[@]}" --prompt-cache ./${ID}/cache --file ./${ID}/prompt \
+		"${PROG[@]}" --prompt-cache ./${ID}/cache --prompt-cache-all --file ./${ID}/prompt \
 			--n_predict 1 2> ./${ID}/log > /dev/null
 	fi
 	[ "${ID}" ] && mv ./main.*.log ./${ID}/logs/
