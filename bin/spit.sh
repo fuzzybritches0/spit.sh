@@ -155,8 +155,8 @@ spit_predict() {
 			--file ./${ID}/prompt 2> ./${ID}/log | tee ./${ID}/prompt_next | stream_output
 	fi
 	cp ./${ID}/prompt_next ./${ID}/prompt
-	llamacpp_fix
-	mv ./main.*.log ./${ID}/logs/
+	mv ./main.log ./${ID}
+	[ "${LLAMACPP_FIX}" ] && llamacpp_fix
 	get_tokens_predictable
 	get_tokens_generated
 }
