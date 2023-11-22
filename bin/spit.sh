@@ -107,18 +107,18 @@ stream_output() {
 	fi
 }
 
-context_size() {
+get_context_size() {
 	CTX_SIZE="$(cat ./log | grep -m1 n_ctx)"
 	CTX_SIZE="$(return_4 ${CTX_SIZE})"
 }
 
-tokens_predict() {
+get_tokens_predictable() {
 	TOKENS="$(cat ./${ID}/log | grep generate:)"
 	TOKENS="$(return_13 ${TOKENS})"
 	((PREDICT=CTX_SIZE-TOKENS))
 }
 
-tokens_gen() {
+get_tokens_generated() {
 	TOK_GEN_1="$(cat ./${ID}/log | grep "sample time")"
 	TOK_GEN_1="$(return_8 ${TOK_GEN_1})"
 	TOK_GEN_2="$(cat ./${ID}/log | grep "eval time")"
@@ -146,8 +146,8 @@ spit_predict() {
 	cp ./${ID}/prompt_next ./${ID}/prompt
 	llamacpp_fix
 	mv ./main.*.log ./${ID}/logs/
-	tokens_predict
-	tokens_gen
+	get_tokens_predictable
+	get_tokens_generated
 }
 
 spit_cache() {
@@ -162,9 +162,9 @@ spit_cache() {
 			--n_predict 1 2> ./${ID}/log > /dev/null
 	fi
 	[ "${ID}" ] && mv ./main.*.log ./${ID}/logs/
-	context_size
-	tokens_predict
-	tokens_gen
+	get_context_size
+	get_tokens_predictable
+	get_tokens_generated
 }
 
 shift_prompt() {
@@ -217,9 +217,9 @@ ID="$(basename ${ID})"
 [ ! -f "./${ID}/prompt_full" ] && touch ./${ID}/prompt_full
 [ ! -f "./${ID}/log" ] && cp ./log ./${ID}/log && NO_TOKENS_GEN=1
 
-context_size
-tokens_predict
-[ ! "${NO_TOKENS_GEN}" ] && tokens_gen
+get_context_size
+get_tokens_predictable
+[ ! "${NO_TOKENS_GEN}" ] && get_tokens_generated
 
 if [ "${INST_START_NEXT}" ] && [ ! "${CHAT}" ]; then
 	P1="$(cat ./prompt)"
