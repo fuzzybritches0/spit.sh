@@ -195,7 +195,7 @@ spit_cache() {
 		"${PROG[@]}" --prompt-cache ./${ID}/cache --prompt-cache-all --file ./${ID}/prompt \
 			--n_predict 1 2> ./${ID}/log > /dev/null
 	fi
-	[ "${ID}" ] && mv ./main.*.log ./${ID}/logs/
+	[ "${ID}" ] && mv ./main.log ./${ID}/logs/
 	get_context_size
 	get_tokens_predictable
 	get_tokens_generated
