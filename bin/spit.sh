@@ -40,21 +40,29 @@ exit_fail() {
 	exit ${2}
 }
 
-init_prompt() {
-	echo -ne "${SYS_START}" >> ./${ID}/prompt
-	echo -n "${SYSTEM}" >> ./${ID}/prompt
-	echo -ne "${SYS_END}" >> ./${ID}/prompt
+init_prompt_chat() {
 	COUNT=0
 	while true; do
 		[ ! "${CHAT[${COUNT}]}" ] && break
-		echo -ne "${INST_START}" >> ./${ID}/prompt
-		echo -ne "${CHAT[${COUNT}]}" >> ./${ID}/prompt
+		echo -ne "${INST_START}"
+		echo -ne "${CHAT[${COUNT}]}"
 		((COUNT+=1))
 		[ "${INST_START_NEXT}" ] && INST_START="${INST_START_NEXT}"
-		echo -ne "${INST_END}" >> ./${ID}/prompt
-		echo -ne "${CHAT[${COUNT}]}" >> ./${ID}/prompt
+		echo -ne "${INST_END}"
+		echo -ne "${REPL_START}"
+		echo -ne "${CHAT[${COUNT}]}"
+		echo -ne "${REPL_END}"
 		((COUNT+=1))
 	done
+}
+
+init_prompt() {
+	if [ "${SYSTEM}" ]; then
+		echo -ne "${SYS_START}" >> ./${ID}/prompt
+		echo -ne "${SYSTEM}" >> ./${ID}/prompt
+		echo -ne "${SYS_END}" >> ./${ID}/prompt
+	fi
+	init_prompt_chat >> ./${ID}/prompt
 }
 
 llamacpp_fix() {
