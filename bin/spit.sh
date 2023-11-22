@@ -40,15 +40,6 @@ exit_fail() {
 	exit ${2}
 }
 
-prompt_template() {
-	if [ "${PROMPT_TEMPLATE}" == "llama2" ]; then
-		SYS_START="[INST] <<SYS>> "
-		SYS_END=" <</SYS>>\n\n"
-		INST_START_NEXT="[INST] "
-		INST_END=" [/INST] "
-	fi
-}
-
 init_prompt() {
 	echo -ne "${SYS_START}" >> ./${ID}/prompt
 	echo -n "${SYSTEM}" >> ./${ID}/prompt
@@ -190,8 +181,6 @@ fi
 
 . ./spit.rc
 
-prompt_template
-
 [ ! "${PROG}" ] && exit_fail "PROG not set!" 1
 
 SYSTEM="$(cat ./system)"
@@ -221,13 +210,13 @@ context_size
 tokens_predict
 [ ! "${NO_TOKENS_GEN}" ] && tokens_gen
 
-if [ "${PROMPT_TEMPLATE}" == "llama2" ] && [ ! "${CHAT}" ]; then
+if [ "${INST_START_NEXT}" ] && [ ! "${CHAT}" ]; then
 	P1="$(cat ./prompt)"
 	P2="$(cat ./${ID}/prompt)"
 	[ "${#P1}" -ne "${#P2}" ] && INST_START="${INST_START_NEXT}"
 fi
 
-[ "${PROMPT_TEMPLATE}" == "llama2" ] && [ "${CHAT}" ] && INST_START="${INST_START_NEXT}"
+[ "${INST_START_NEXT}" ] && [ "${CHAT}" ] && INST_START="${INST_START_NEXT}"
 
 while true; do
 	if [ "${INTERACTIVE}" ]; then
