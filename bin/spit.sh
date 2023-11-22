@@ -53,6 +53,14 @@ read_input() {
 	echo
 }
 
+save_input() {
+	echo -ne "${INST_START}" >> ./${ID}/prompt
+	echo -ne "${INPUT}" >> ./${ID}/prompt
+	echo -ne "${INST_END}" >> ./${ID}/prompt
+	echo -ne "${REPL_START}" >> ./${ID}/prompt
+	echo -e  "${USER_NAME}: ${INPUT}\n" >> ./${ID}/prompt_full
+}
+
 init_prompt_chat() {
 	COUNT=0
 	while true; do
