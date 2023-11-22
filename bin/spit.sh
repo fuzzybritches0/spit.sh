@@ -131,7 +131,7 @@ stream_output() {
 }
 
 get_context_size() {
-	CTX_SIZE="$(cat ./log | grep -m1 n_ctx)"
+	CTX_SIZE="$(cat ./log | grep -m1 "n_ctx ")"
 	CTX_SIZE="$(return_4 ${CTX_SIZE})"
 }
 
@@ -162,7 +162,8 @@ jump_offset_fix() {
 
 jump_n() {
 	PROMPT="$(cat ./${ID}/prompt)"
-	JUMP=${#PROMPT}
+	((JUMP=${#PROMPT}-${JUMP_OFFSET}))
+	[ "${LLAMACPP_FIX}" ] && ((JUMP+=1))
 }
 
 spit_predict() {
@@ -195,7 +196,7 @@ spit_cache() {
 		"${PROG[@]}" --prompt-cache ./${ID}/cache --prompt-cache-all --file ./${ID}/prompt \
 			--n_predict 1 2> ./${ID}/log > /dev/null
 	fi
-	[ "${ID}" ] && mv ./main.log ./${ID}/logs/
+	[ "${ID}" ] && mv ./main.log ./${ID}
 	get_context_size
 	get_tokens_predictable
 	get_tokens_generated
@@ -251,20 +252,18 @@ remove_eos_token() {
 [ "${1}" == "help" ] || [ "${1}" == "-h" ] || [ "${1}" == "--help" ] && \
 	help_screen && exit 0
 
-[ ! -f "./spit.rc" ] && exit_fail "./spit.rc missing!" 1
-[ ! -f "./system" ] && exit_fail "./system missing!" 1
+[ ! "${1}" ] && help_screen && exit_fail "no ID given!" 1
 
-if [ "${1}" == "reset" ]; then
-	rm -rf cache log prompt
-	echo "reset"
-	exit 0
-fi
+[ ! -f "./spit.conf.sh" ] && exit_fail "./spit.conf.sh missing!" 1
 
-. ./spit.rc
+. ./spit.conf.sh
 
 [ ! "${PROG}" ] && exit_fail "PROG not set!" 1
 
-SYSTEM="$(cat ./system)"
+[ ! "${JUMP_OFFSET}" ] && JUMP_OFFSET=0
+
+stop_on_eos_token
+stop_on_sequences
 
 if [ ! -f "./cache" ]; then
 	init_prompt
@@ -273,33 +272,34 @@ if [ ! -f "./cache" ]; then
 	[ ! "${DEBUG}" ] && [ "${INTERACTIVE}" ] && echo "done."
 fi
 
-[ "${1}" == "init" ] && exit 0
-
-[ ! "${1}" ] && help_screen && exit_fail "no ID given!" 1
-
 ID="$(return_1 ${1})"
 ID="$(basename ${ID})"
 
 [ ! -d "./${ID}" ] && mkdir ./${ID}
-[ ! -d "./${ID}/logs" ] && mkdir ./${ID}/logs
 [ ! -f "./${ID}/cache" ] && cp ./cache ./${ID}/cache
 [ ! -f "./${ID}/prompt" ] && cp ./prompt ./${ID}/prompt
 [ ! -f "./${ID}/prompt_full" ] && touch ./${ID}/prompt_full
-[ ! -f "./${ID}/log" ] && cp ./log ./${ID}/log && NO_TOKENS_GEN=1
+[ ! -f "./${ID}/log" ] && cp ./log ./${ID}/log
 
 get_context_size
 get_tokens_predictable
-[ ! "${NO_TOKENS_GEN}" ] && get_tokens_generated
+
+P1="$(cat ./prompt)"
+P2="$(cat ./${ID}/prompt)"
+
+[ "${#P2}" -gt "${#P1}" ] && get_tokens_generated
 
 if [ "${INST_START_NEXT}" ] && [ ! "${CHAT}" ]; then
-	P1="$(cat ./prompt)"
-	P2="$(cat ./${ID}/prompt)"
-	[ "${#P1}" -ne "${#P2}" ] && INST_START="${INST_START_NEXT}"
+	[ "${#P2}" -gt "${#P1}" ] && INST_START="${INST_START_NEXT}"
 fi
-
 [ "${INST_START_NEXT}" ] && [ "${CHAT}" ] && INST_START="${INST_START_NEXT}"
 
 jump_offset_fix_resume
+
+if [ "${TEST}" ]; then
+	TCOUNT=0
+	INTERACTIVE=1
+fi
 
 [ ! "${DEBUG}" ] && [ "${INTERACTIVE}" ] && display_chat
 
@@ -338,6 +338,7 @@ while true; do
 		elif [ ! "$(detect_stop_sequence)" ]; then
 			break
 		fi
+		process_stop_sequence
 	done
 
 	cat ./${ID}/output >> ./${ID}/prompt_full
