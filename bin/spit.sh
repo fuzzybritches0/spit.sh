@@ -107,16 +107,6 @@ stream_output() {
 	fi
 }
 
-format_chat() {
-	while IFS= read -r LINE; do
-		INTENT=
-		[ "${LINE:0:${#USER_NAME}}:" == "${USER_NAME}:" ] && INTENT=1
-		[ "${LINE:0:${#AI_NAME}}:" == "${AI_NAME}:" ] && INTENT=1
-		[ "${INTENT}" ] && echo "${LINE}" | fmt -t
-		[ ! "${INTENT}" ] && echo "${LINE}" | fmt
-	done
-}
-
 context_size() {
 	CTX_SIZE="$(cat ./log | grep -m1 n_ctx)"
 	CTX_SIZE="$(return_4 ${CTX_SIZE})"
