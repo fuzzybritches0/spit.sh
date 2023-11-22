@@ -26,7 +26,7 @@ help_screen() {
 	echo "HELP"
 	echo "----"
 	echo "spit.sh v0.0.1"
-	echo "${0} [ ID || reset || init || help || -h || --help ]"
+	echo "${0} [ ID || help || -h || --help ]"
 	echo
 	echo "ID              an identifier for a new or existing chat session."
 	echo "reset           remove all files generated for the initial prompt"
