@@ -93,7 +93,7 @@ display_chat() {
 	cat ./${ID}/prompt_full
 }
 
-to_screen() {
+stream_output() {
 	if [ "${DEBUG}" ]; then
 		cat
 	else
@@ -151,7 +151,7 @@ spit_predict() {
 	else
 		jump_n
 		"${PROG[@]}" --prompt-cache ./${ID}/cache --prompt-cache-all --n_predict ${PREDICT} "${REV_PROMPTS[@]}" \
-			--file ./${ID}/prompt 2> ./${ID}/log | tee ./${ID}/prompt_next | to_screen
+			--file ./${ID}/prompt 2> ./${ID}/log | tee ./${ID}/prompt_next | stream_output
 	fi
 	cp ./${ID}/prompt_next ./${ID}/prompt
 	llamacpp_fix
