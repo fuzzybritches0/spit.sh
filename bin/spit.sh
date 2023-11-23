@@ -237,15 +237,17 @@ detect_stop_sequence() {
 }
 
 stop_on_eos_token() {
-	REV_PROMPTS=(${REV_PROMPTS[@]} --reverse-prompt ${EOS})
+	[ "${EOS}" ] && REV_PROMPTS=(${REV_PROMPTS[@]} --reverse-prompt ${EOS})
 }
 
 remove_eos_token() {
-	PROMPT="$(cat ./${ID}/prompt)"
-	((OFFSET=${#PROMPT}-${#EOS}))
-	if [ "${PROMPT:${OFFSET}:${#EOS}}" == "${EOS}" ]; then
-		echo -n "${PROMPT:0:${OFFSET}}" > ./${ID}/prompt
-		echo "${EOS}"
+	if [ "${EOS}" ]; then
+		PROMPT="$(cat ./${ID}/prompt)"
+		((OFFSET=${#PROMPT}-${#EOS}))
+		if [ "${PROMPT:${OFFSET}:${#EOS}}" == "${EOS}" ]; then
+			echo -n "${PROMPT:0:${OFFSET}}" > ./${ID}/prompt
+			echo "${EOS}"
+		fi
 	fi
 }
 
@@ -262,7 +264,7 @@ remove_eos_token() {
 
 [ ! "${JUMP_OFFSET}" ] && JUMP_OFFSET=0
 
-stop_on_eos_token
+[ "${EOS}" ] && stop_on_eos_token
 stop_on_sequences
 
 if [ ! -f "./cache" ]; then
