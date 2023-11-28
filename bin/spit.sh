@@ -246,7 +246,6 @@ remove_eos_token() {
 		((OFFSET=${#PROMPT}-${#EOS}))
 		if [ "${PROMPT:${OFFSET}:${#EOS}}" == "${EOS}" ]; then
 			echo -n "${PROMPT:0:${OFFSET}}" > ./${ID}/prompt
-			echo "${EOS}"
 		fi
 	fi
 }
@@ -320,7 +319,6 @@ while true; do
 
 	spit_cache
 	if [ "$(cat ./${ID}/log | grep "prompt is too long")" ]; then
-		cp ./${ID}/prompt_last ./${ID}/prompt
 		exit_fail "prompt is too long!" 2
 	fi
 
@@ -332,15 +330,15 @@ while true; do
 	while true; do
 		cp ./${ID}/prompt ./${ID}/prompt_last
 		spit_predict
+		remove_eos_token
 		save_output
 		if [ "${PREDICT}" -eq "0" ] && [ ! "$(cat ./${ID}/log | grep "[end of text]")" ]; then
 			exit_fail "reached maximum length!" 2
-		elif [ "$(remove_eos_token)" ]; then
-			break
-		elif [ ! "$(detect_stop_sequence)" ]; then
+		elif [ "$(detect_stop_sequence)" ]; then
+			process_stop_sequence
+		else
 			break
 		fi
-		process_stop_sequence
 	done
 
 	cat ./${ID}/output >> ./${ID}/prompt_full
