@@ -5,10 +5,6 @@ return_1() {
 	echo "${1}"
 }
 
-return_4() {
-	echo "${4}"
-}
-
 return_8() {
 	echo "${8}"
 }
@@ -58,14 +54,12 @@ save_input() {
 	echo -ne "${INPUT}" >> ./${ID}/prompt
 	echo -ne "${INST_END}" >> ./${ID}/prompt
 	echo -ne "${REPL_START}" >> ./${ID}/prompt
-	echo -e  "${USER_NAME}: ${INPUT}\n" >> ./${ID}/prompt_full
+	echo -ne  "\n\n${USER_NAME}: ${INPUT}" >> ./${ID}/prompt_full
 }
 
 get_predicted() {
 	PROMPT="$(cat ./${ID}/prompt)"
-	PROMPT_LAST="$(cat ./${ID}/prompt_last)"
-	((PROMPT_OFFSET=${#PROMPT_LAST}-${JUMP_OFFSET}))
-	PREDICTED="${PROMPT:${PROMPT_OFFSET}}"
+	PREDICTED="${PROMPT:${JUMP_OFFSET}}"
 }
 
 save_output() {
@@ -94,11 +88,11 @@ init_prompt_chat() {
 
 init_prompt() {
 	if [ "${SYSTEM}" ]; then
-		echo -ne "${SYS_START}" >> ./${ID}/prompt
-		echo -ne "${SYSTEM}" >> ./${ID}/prompt
-		echo -ne "${SYS_END}" >> ./${ID}/prompt
+		echo -ne "${SYS_START}" >> ./prompt
+		echo -ne "${SYSTEM}" >> ./prompt
+		echo -ne "${SYS_END}" >> ./prompt
 	fi
-	init_prompt_chat >> ./${ID}/prompt
+	init_prompt_chat >> ./prompt
 }
 
 llamacpp_fix() {
@@ -108,7 +102,7 @@ llamacpp_fix() {
 
 display_chat() {
 	if [ ! "${INTRO}" ]; then
-		echo "${SYSTEM}"
+		[ "${SYSTEM}" ] && echo "${SYSTEM}"
 		init_prompt_chat
 	else
 		echo "${INTRO}"
@@ -123,60 +117,66 @@ stream_output() {
 		count=0
 		while IFS= read -N1 C; do
 			((count++))
-			if [ "${count}" -gt "${JUMP}" ]; then
+			if [ "${count}" -gt "${JUMP_OFFSET}" ]; then
 				printf "%s" "${C}"
 			fi
 		done
 	fi
 }
 
-get_context_size() {
-	CTX_SIZE="$(cat ./log | grep -m1 "n_ctx ")"
-	CTX_SIZE="$(return_4 ${CTX_SIZE})"
-}
-
 get_tokens_predictable() {
-	TOKENS="$(cat ./${ID}/log | grep generate:)"
-	TOKENS="$(return_13 ${TOKENS})"
-	((PREDICT=CTX_SIZE-TOKENS))
-}
-
-get_tokens_generated() {
-	TOK_GEN_1="$(cat ./${ID}/log | grep "sample time")"
-	TOK_GEN_1="$(return_8 ${TOK_GEN_1})"
-	TOK_GEN_2="$(cat ./${ID}/log | grep "eval time")"
-	TOK_GEN_2="$(return_9 ${TOK_GEN_1})"
-	((PREDICT-=(TOK_GEN_1+TOK_GEN2)))
-}
-
-jump_offset_fix_resume() {
-	if [ "${JUMP_OFFSET_1}" ]; then
-		CON_COUNT="$(cat ./1/prompt | grep -o "$(echo -ne ${REPL_START})" | wc -l)"
-		((JUMP_OFFSET+=JUMP_OFFSET_1 * CON_COUNT))
+	if [ -f "./${ID}/log" ]; then
+		TOKENS="$(cat ./${ID}/log | grep generate:)"
+		TOKENS="$(return_13 ${TOKENS})"
+		((PREDICT=CTX_SIZE-TOKENS))
+	else
+		PREDICT=${CTX_SIZE}
 	fi
 }
 
-jump_offset_fix() {
-	((JUMP_OFFSET+=JUMP_OFFSET_1))
+get_tokens_generated() {
+	if [ -f "./${ID}/log" ]; then
+		TOK_GEN_1="$(cat ./${ID}/log | grep "sample time")"
+		TOK_GEN_1="$(return_8 ${TOK_GEN_1})"
+		TOK_GEN_2="$(cat ./${ID}/log | grep "eval time")"
+		TOK_GEN_2="$(return_9 ${TOK_GEN_1})"
+		((PREDICT-=(TOK_GEN_1+TOK_GEN_2)))
+	fi
+}
+
+get_offset() {
+	PROMPT="$(cat ./${ID}/prompt)"
+	DIFF="${PROMPT}"
+	for TOKEN in "${OFFSET_FIX_TOKENS[@]}"; do
+		DIFF="${DIFF//${TOKEN}}"
+	done
+	((JUMP_OFFSET=${#DIFF}+${OFFSET}))
 }
 
 jump_n() {
-	PROMPT="$(cat ./${ID}/prompt)"
-	((JUMP=${#PROMPT}-${JUMP_OFFSET}))
-	[ "${LLAMACPP_FIX}" ] && ((JUMP+=1))
+	((JUMP=${JUMP_OFFSET}))
+	if [ "${LLAMACPP_FIX}" ]; then
+		((JUMP+=1))
+	fi
 }
 
 spit_predict() {
+	PROG_P=(--prompt-cache ./${ID}/cache
+		--prompt-cache-all
+		--file ./${ID}/prompt
+		--n_predict ${PREDICT}
+		--simple-io
+		"${REV_PROMPTS[@]}")
+
 	if [ "${DEBUG}" ]; then
-		"${PROG[@]}" --prompt-cache ./${ID}/cache --prompt-cache-all --n_predict ${PREDICT} "${REV_PROMPTS[@]}" \
-			--file ./${ID}/prompt 2> ./${ID}/log | tee ./${ID}/prompt_next
+		#echo -n "RUNNING: ${PROG[@]} ${PROG_P[@]}"
+		"${PROG[@]}" "${PROG_P[@]}" 2> ./${ID}/log | tee ./${ID}/prompt_next
 		echo
 		echo "EXIT WITH: ${PIPESTATUS[0]}"
-		cat ./${ID}/log
+		#cat ./${ID}/log
 	else
-		jump_n
-		"${PROG[@]}" --prompt-cache ./${ID}/cache --prompt-cache-all --n_predict ${PREDICT} "${REV_PROMPTS[@]}" \
-			--file ./${ID}/prompt 2> ./${ID}/log | tee ./${ID}/prompt_next | stream_output
+		#jump_n
+		"${PROG[@]}" "${PROG_P[@]}" 2> ./${ID}/log | tee ./${ID}/prompt_next | stream_output
 	fi
 	cp ./${ID}/prompt_next ./${ID}/prompt
 	mv ./main.log ./${ID}
@@ -186,20 +186,30 @@ spit_predict() {
 }
 
 spit_cache() {
+	if [ "${BOS}" ]; then
+		cp ./${ID}/prompt ./${ID}/prompt_tmp
+		echo -ne "${BOS}" >> ./${ID}/prompt
+	fi
+
+	PROG_P=(--prompt-cache ./${ID}/cache
+		--prompt-cache-all
+		--file ./${ID}/prompt
+		--n_predict 1
+		--simple-io)
+
 	if [ "${DEBUG}" ]; then
-		"${PROG[@]}" --prompt-cache ./${ID}/cache --prompt-cache-all --file ./${ID}/prompt \
-			--n_predict 1 2> ./${ID}/log
+		#echo -n "RUNNING: ${PROG[@]} ${PROG_P[@]}"
+		"${PROG[@]}" "${PROG_P[@]}" 2> ./${ID}/log
 		echo
 		echo "EXIT WITH: ${PIPESTATUS[0]}"
-		cat ./${ID}/log
+		#cat ./${ID}/log
 	else
-		"${PROG[@]}" --prompt-cache ./${ID}/cache --prompt-cache-all --file ./${ID}/prompt \
-			--n_predict 1 2> ./${ID}/log > /dev/null
+		"${PROG[@]}" "${PROG_P[@]}" 2> ./${ID}/log > /dev/null
 	fi
 	[ "${ID}" ] && mv ./main.log ./${ID}
-	get_context_size
 	get_tokens_predictable
 	get_tokens_generated
+	[ "${BOS}" ] && mv ./${ID}/prompt_tmp ./${ID}/prompt
 }
 
 process_stop_sequence() {
@@ -229,8 +239,8 @@ stop_on_sequences() {
 detect_stop_sequence() {
 	for EACH in ${STOP_SEQUENCES[@]}; do
 		_EACH="[/${EACH}]"
-		((OFFSET=${#PROMPT}-${#_EACH}))
-		if [ "${PROMPT:${OFFSET}:${#_EACH}}" == "${_EACH}" ]; then
+		((OFFSETD=${#PROMPT}-${#_EACH}))
+		if [ "${PROMPT:${OFFSETD}:${#_EACH}}" == "${_EACH}" ]; then
 			echo "${EACH}"
 		fi
 	done
@@ -243,9 +253,10 @@ stop_on_eos_token() {
 remove_eos_token() {
 	if [ "${EOS}" ]; then
 		PROMPT="$(cat ./${ID}/prompt)"
-		((OFFSET=${#PROMPT}-${#EOS}))
-		if [ "${PROMPT:${OFFSET}:${#EOS}}" == "${EOS}" ]; then
-			echo -n "${PROMPT:0:${OFFSET}}" > ./${ID}/prompt
+		((OFFSETR=${#PROMPT}-${#EOS}))
+		if [ "${PROMPT:${OFFSETR}:${#EOS}}" == "${EOS}" ]; then
+			echo -n "${PROMPT:0:${OFFSETR}}" > ./${ID}/prompt
+			REMOVED_EOS_TOKEN=1
 		fi
 	fi
 }
@@ -259,30 +270,31 @@ remove_eos_token() {
 
 . ./spit.conf.sh
 
-[ ! "${PROG}" ] && exit_fail "PROG not set!" 1
-
-[ ! "${JUMP_OFFSET}" ] && JUMP_OFFSET=0
+[ ! "${PROG[0]}" ] && exit_fail "PROG not set!" 1
+[ ! -f "${PROG[0]}" ] && exit_fail "${PROG[0]} not found!" 1
+[ ! -x "${PROG[0]}" ] && exit_fail "${PROG[0]} not executable!" 1
 
 [ "${EOS}" ] && stop_on_eos_token
 stop_on_sequences
 
-if [ ! -f "./cache" ]; then
+if [ ! -f "./cache" ] && [ "${SYSTEM}${CHAT[0]}" ]; then
 	init_prompt
 	[ ! "${DEBUG}" ] && [ "${INTERACTIVE}" ] && echo -n "creating cache..."
 	spit_cache
 	[ ! "${DEBUG}" ] && [ "${INTERACTIVE}" ] && echo "done."
 fi
 
+[ ! "${SYSTEM}" ] && touch ./prompt
+
 ID="$(return_1 ${1})"
 ID="$(basename ${ID})"
 
 [ ! -d "./${ID}" ] && mkdir ./${ID}
-[ ! -f "./${ID}/cache" ] && cp ./cache ./${ID}/cache
 [ ! -f "./${ID}/prompt" ] && cp ./prompt ./${ID}/prompt
 [ ! -f "./${ID}/prompt_full" ] && touch ./${ID}/prompt_full
-[ ! -f "./${ID}/log" ] && cp ./log ./${ID}/log
+[ ! -f "./${ID}/cache" ] && [ -f "./cache" ] && cp ./cache ./${ID}/cache
+[ ! -f "./${ID}/log" ] && [ -f "./log" ] && cp ./log ./${ID}/log
 
-get_context_size
 get_tokens_predictable
 
 P1="$(cat ./prompt)"
@@ -295,8 +307,6 @@ if [ "${INST_START_NEXT}" ] && [ ! "${CHAT}" ]; then
 fi
 [ "${INST_START_NEXT}" ] && [ "${CHAT}" ] && INST_START="${INST_START_NEXT}"
 
-jump_offset_fix_resume
-
 if [ "${TEST}" ]; then
 	TCOUNT=0
 	INTERACTIVE=1
@@ -304,7 +314,10 @@ fi
 
 [ ! "${DEBUG}" ] && [ "${INTERACTIVE}" ] && display_chat
 
+[ ! "${OFFSET}" ] && OFFSET=0
+
 while true; do
+
 	if [ "${INTERACTIVE}" ]; then
 		read_input
 	elif [ "${2}" ]; then
@@ -314,6 +327,7 @@ while true; do
 	fi
 
 	[ ! "${INPUT}" ] && exit 0
+	[ "${INPUT}" == ">file" ] && INPUT="$(cat ./${ID}/input)"
 
 	save_input
 
@@ -323,20 +337,26 @@ while true; do
 	fi
 
 	[ "${INTERACTIVE}" ] && echo -n "${AI_NAME}:"
-	echo -n "${AI_NAME}:" >> ./${ID}/prompt_full
+	echo -ne "\n\n${AI_NAME}:" >> ./${ID}/prompt_full
 
 	echo -n > ./${ID}/output
 
 	while true; do
 		cp ./${ID}/prompt ./${ID}/prompt_last
+		get_offset
 		spit_predict
 		remove_eos_token
 		save_output
-		if [ "${PREDICT}" -eq "0" ] && [ ! "$(cat ./${ID}/log | grep "[end of text]")" ]; then
+		rm -f ./${ID}/input
+		if [ "${PREDICT}" -lt "1" ]; then
 			exit_fail "reached maximum length!" 2
 		elif [ "$(detect_stop_sequence)" ]; then
 			process_stop_sequence
-		else
+			spit_cache
+		elif [ "${REMOVED_EOS_TOKEN}" ]; then
+			REMOVED_EOS_TOKEN=
+			break
+		elif [ "$(cat ./${ID}/log | grep "[end of text]")" ]; then
 			break
 		fi
 	done
@@ -344,8 +364,7 @@ while true; do
 	cat ./${ID}/output >> ./${ID}/prompt_full
 
 	((LAST_CHAR=${#PREDICTED}-1))
-	if [ "${PREDICTED:${LAST_CHAR}}" != "$(echo -e \n)" ]; then
-		echo >> ./${ID}/prompt_full
+	if [ "${PREDICTED:${LAST_CHAR}}" != "$(echo)" ] || [ ! "${PREDICTED}" ]; then
 		echo
 	fi
 
@@ -355,6 +374,4 @@ while true; do
 	[ ! "${INTERACTIVE}" ] && echo && break
 
 	[ "${INST_START_NEXT}" ] && INST_START="${INST_START_NEXT}" && INST_START_NEXT=
-
-	jump_offset_fix
 done
