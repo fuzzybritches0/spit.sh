@@ -18,6 +18,8 @@ STOP_SEQUENCES=("EXECUTE")
 EXECUTE() {
 	[ ! -d "./${ID}/env" ] && mkdir ./${ID}/env
 	echo -ne "\n[OUTPUT]"
+	NLFIX="${1}"
+	[ "${NLFIX:0:1}" == "$(echo)" ] && NLFIX="${1:1}"
 	echo "${1}" > ./${ID}/EXECUTE
 	chmod u+x ./${ID}/EXECUTE
 	cd ./${ID}/env

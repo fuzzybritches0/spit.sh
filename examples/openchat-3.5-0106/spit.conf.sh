@@ -16,18 +16,6 @@ OFFSET_FIX_TOKENS=()
 OFFSET=1
 STOP_SEQUENCES=("EXECUTE")
 
-EXECUTE() {
-	[ ! -d "./${ID}/env" ] && mkdir ./${ID}/env
-	echo -ne "\n[OUTPUT]\n"
-	echo "${1}" > ./${ID}/EXECUTE
-	chmod u+x ./${ID}/EXECUTE
-	cd ./${ID}/env
-	../EXECUTE 2>&1
-	EXIT_CODE="${?}"
-	rm ../EXECUTE
-	echo -ne "\n[/OUTPUT EXIT_CODE:${EXIT_CODE}]\n"
-}
-
 DEBUG=
 INTERACTIVE=1
 
