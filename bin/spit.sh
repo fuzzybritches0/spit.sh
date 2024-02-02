@@ -57,17 +57,8 @@ save_input() {
 	echo -ne  "\n\n${USER_NAME}: ${INPUT}" >> ./${ID}/prompt_full
 }
 
-get_predicted() {
-	PROMPT="$(cat ./${ID}/prompt)"
-	PREDICTED="${PROMPT:${JUMP_OFFSET}}"
-}
-
 save_output() {
-	get_predicted
-	echo -n "${PREDICTED}" > ./${ID}/predicted
-	[ "${DEBUG}" ] && cp ./${ID}/prompt ./${ID}/prompt_raw
-	cat ./${ID}/prompt_last ./${ID}/predicted > ./${ID}/prompt
-	cat ./${ID}/predicted >> ./${ID}/output
+	echo -n "${GENERATED}" | tee -a ./${ID}/prompt >> ./${ID}/output
 }
 
 init_prompt_chat() {
@@ -95,11 +86,6 @@ init_prompt() {
 	init_prompt_chat >> ./prompt
 }
 
-llamacpp_fix() {
-	PROMPT="$(cat ./${ID}/prompt)"
-	echo "${PROMPT:1}" > ./${ID}/prompt
-}
-
 display_chat() {
 	if [ ! "${INTRO}" ]; then
 		[ "${SYSTEM}" ] && echo "${SYSTEM}"
@@ -108,20 +94,6 @@ display_chat() {
 		echo "${INTRO}"
 	fi
 	cat ./${ID}/prompt_full
-}
-
-stream_output() {
-	if [ "${DEBUG}" ]; then
-		cat
-	else
-		count=0
-		while IFS= read -N1 C; do
-			((count++))
-			if [ "${count}" -gt "${JUMP_OFFSET}" ]; then
-				printf "%s" "${C}"
-			fi
-		done
-	fi
 }
 
 get_tokens_predictable() {
@@ -144,43 +116,26 @@ get_tokens_generated() {
 	fi
 }
 
-get_offset() {
-	PROMPT="$(cat ./${ID}/prompt)"
-	DIFF="${PROMPT}"
-	for TOKEN in "${OFFSET_FIX_TOKENS[@]}"; do
-		DIFF="${DIFF//${TOKEN}}"
-	done
-	((JUMP_OFFSET=${#DIFF}+${OFFSET}))
-}
-
-jump_n() {
-	((JUMP=${JUMP_OFFSET}))
-	if [ "${LLAMACPP_FIX}" ]; then
-		((JUMP+=1))
-	fi
-}
-
 spit_predict() {
 	PROG_P=(--prompt-cache ./${ID}/cache
 		--prompt-cache-all
 		--file ./${ID}/prompt
 		--n_predict ${PREDICT}
 		--simple-io
-		"${REV_PROMPTS[@]}")
+		"${REV_PROMPTS[@]}"
+		--no-display-prompt)
 
 	if [ "${DEBUG}" ]; then
 		#echo -n "RUNNING: ${PROG[@]} ${PROG_P[@]}"
-		"${PROG[@]}" "${PROG_P[@]}" 2> ./${ID}/log | tee ./${ID}/prompt_next
+		"${PROG[@]}" "${PROG_P[@]}" 2> ./${ID}/log | tee ./${ID}/generated
 		echo
 		echo "EXIT WITH: ${PIPESTATUS[0]}"
 		#cat ./${ID}/log
 	else
-		#jump_n
-		"${PROG[@]}" "${PROG_P[@]}" 2> ./${ID}/log | tee ./${ID}/prompt_next | stream_output
+		"${PROG[@]}" "${PROG_P[@]}" 2> ./${ID}/log | tee ./${ID}/generated
 	fi
-	cp ./${ID}/prompt_next ./${ID}/prompt
+	GENERATED="$(cat ./${ID}/generated)"
 	mv ./main.log ./${ID}
-	[ "${LLAMACPP_FIX}" ] && llamacpp_fix
 	get_tokens_predictable
 	get_tokens_generated
 }
@@ -217,12 +172,12 @@ process_stop_sequence() {
 	if [ "${SEQ}" ]; then
 		SEQ_START="[${SEQ}]"
 		SEQ_STOP="[/${SEQ}]"
-		((STEPS=${#PREDICTED}-${#SEQ_START}))
+		((STEPS=${#GENERATED}-${#SEQ_START}))
 		for STEP in $(seq ${STEPS} -1 0); do
 			((OFFSETL=STEP+${#SEQ_START}))
-			((OFFSETR=${#PREDICTED}-${OFFSETL}-${#SEQ_STOP}))
-			if [ "${PREDICTED:${STEP}:${#SEQ_START}}" == "${SEQ_START}" ]; then
-				EXEC="${PREDICTED:${OFFSETL}:${OFFSETR}}"
+			((OFFSETR=${#GENERATED}-${OFFSETL}-${#SEQ_STOP}))
+			if [ "${GENERATED:${STEP}:${#SEQ_START}}" == "${SEQ_START}" ]; then
+				EXEC="${GENERATED:${OFFSETL}:${OFFSETR}}"
 				break
 			fi
 		done
@@ -239,8 +194,8 @@ stop_on_sequences() {
 detect_stop_sequence() {
 	for EACH in ${STOP_SEQUENCES[@]}; do
 		_EACH="[/${EACH}]"
-		((OFFSETD=${#PROMPT}-${#_EACH}))
-		if [ "${PROMPT:${OFFSETD}:${#_EACH}}" == "${_EACH}" ]; then
+		((OFFSETD=${#GENERATED}-${#_EACH}))
+		if [ "${GENERATED:${OFFSETD}:${#_EACH}}" == "${_EACH}" ]; then
 			echo "${EACH}"
 		fi
 	done
@@ -252,10 +207,9 @@ stop_on_eos_token() {
 
 remove_eos_token() {
 	if [ "${EOS}" ]; then
-		PROMPT="$(cat ./${ID}/prompt)"
-		((OFFSETR=${#PROMPT}-${#EOS}))
-		if [ "${PROMPT:${OFFSETR}:${#EOS}}" == "${EOS}" ]; then
-			echo -n "${PROMPT:0:${OFFSETR}}" > ./${ID}/prompt
+		((OFFSETR=${#GENERATED}-${#EOS}))
+		if [ "${GENERATED:${OFFSETR}:${#EOS}}" == "${EOS}" ]; then
+			GENERATED="${GENERATED:0:${OFFSETR}}"
 			REMOVED_EOS_TOKEN=1
 		fi
 	fi
@@ -314,8 +268,6 @@ fi
 
 [ ! "${DEBUG}" ] && [ "${INTERACTIVE}" ] && display_chat
 
-[ ! "${OFFSET}" ] && OFFSET=0
-
 while true; do
 
 	if [ "${INTERACTIVE}" ]; then
@@ -343,7 +295,6 @@ while true; do
 
 	while true; do
 		cp ./${ID}/prompt ./${ID}/prompt_last
-		get_offset
 		spit_predict
 		remove_eos_token
 		save_output
@@ -363,8 +314,8 @@ while true; do
 
 	cat ./${ID}/output >> ./${ID}/prompt_full
 
-	((LAST_CHAR=${#PREDICTED}-1))
-	if [ "${PREDICTED:${LAST_CHAR}}" != "$(echo)" ] || [ ! "${PREDICTED}" ]; then
+	((LAST_CHAR=${#GENERATED}-1))
+	if [ "${GENERATED:${LAST_CHAR}}" != "$(echo)" ] || [ ! "${GENERATED}" ]; then
 		echo
 	fi
 
