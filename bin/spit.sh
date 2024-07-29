@@ -17,17 +17,31 @@ return_13() {
 	echo "${13}"
 }
 
+options() {
+	COUNT=1
+	for OPTION in "${@}"; do
+		((COUNT++))
+		[ "${OPTION}" == "--id" ] && ID="${@:${COUNT}:1}" && LCOUNT="${COUNT}" && continue
+		[ "${OPTION}" == "--sysid" ] && SID="${@:${COUNT}:1}" &&\
+			LCOUNT="${COUNT}" && continue
+	done
+	((LCOUNT++))
+	INPUT="${@:${LCOUNT}}"
+}
+
 help_screen() {
 	echo
 	echo "HELP"
 	echo "----"
-	echo "spit.sh v0.0.1"
-	echo "${0} [ ID || help || -h || --help ]"
+	echo "spit.sh v0.0.2"
 	echo
-	echo "ID              an identifier for a new or existing chat session."
-	echo "reset           remove all files generated for the initial prompt"
-	echo "init            just generate the initial prompt files then exit"
-	echo "help|-h|--help  show this here help screen"
+	echo "${0} [ -h || --help ]"
+	echo "${0} [ --id CHAT_SESSION_ID ] [ --sysid SYSTEM_ID ] [ INPUT ]"
+	echo
+	echo "CHAT_ID           an identifier for a new or existing chat session (mandatory)"
+	echo "SYSTEM_ID         a numeric identifier for the system prompt (if omitted '0' is assumed)"
+	echo "INPUT             INPUT non-interactively"
+	echo "-h|--help         show this here help screen"
 	echo
 }
 
@@ -36,9 +50,14 @@ exit_fail() {
 	exit ${2}
 }
 
+exit_fail_log() {
+	cat ./log_${SID}
+	exit ${1}
+}
+
 read_input() {
 	echo
-	echo -n "${USER_NAME} (${PREDICT}): "
+	echo -n "$ "
 	if [ "${TEST[${TCOUNT}]}" ]; then
 		echo "${TEST[${TCOUNT}]}"
 		INPUT="${TEST[${TCOUNT}]}"
@@ -50,15 +69,11 @@ read_input() {
 }
 
 save_input() {
-	echo -ne "${INST_START}" >> ./${ID}/prompt
-	echo -ne "${INPUT}" >> ./${ID}/prompt
-	echo -ne "${INST_END}" >> ./${ID}/prompt
-	echo -ne "${REPL_START}" >> ./${ID}/prompt
-	echo -ne  "\n\n${USER_NAME}: ${INPUT}" >> ./${ID}/prompt_full
-}
+	echo -ne "${INST_START}" >> "${FPROMPT}"
+	echo -ne "${INPUT}" >> "${FPROMPT}"
+	echo -ne "${INST_END}" >> "${FPROMPT}"
+	echo -ne "${REPL_START}" >> "${FPROMPT}"
 
-save_output() {
-	echo -n "${GENERATED}" | tee -a ./${ID}/prompt >> ./${ID}/output
 }
 
 init_prompt_chat() {
@@ -79,109 +94,84 @@ init_prompt_chat() {
 
 init_prompt() {
 	if [ "${SYSTEM}" ]; then
-		echo -ne "${SYS_START}" >> ./prompt
-		echo -ne "${SYSTEM}" >> ./prompt
-		echo -ne "${SYS_END}" >> ./prompt
+		echo -ne "${SYS_START}" >> "${FPROMPT}"
+		echo -ne "${SYSTEM}" >> "${FPROMPT}"
+		echo -ne "${SYS_END}" >> "${FPROMPT}"
 	fi
-	init_prompt_chat >> ./prompt
-}
-
-display_chat() {
-	if [ ! "${INTRO}" ]; then
-		[ "${SYSTEM}" ] && echo "${SYSTEM}"
-		init_prompt_chat
-	else
-		echo "${INTRO}"
-	fi
-	cat ./${ID}/prompt_full
-}
-
-get_tokens_predictable() {
-	if [ -f "./${ID}/log" ]; then
-		TOKENS="$(cat ./${ID}/log | grep generate:)"
-		TOKENS="$(return_13 ${TOKENS})"
-		((PREDICT=CTX_SIZE-TOKENS))
-	else
-		PREDICT=${CTX_SIZE}
-	fi
-}
-
-get_tokens_generated() {
-	if [ -f "./${ID}/log" ]; then
-		TOK_GEN_1="$(cat ./${ID}/log | grep "sample time")"
-		TOK_GEN_1="$(return_8 ${TOK_GEN_1})"
-		TOK_GEN_2="$(cat ./${ID}/log | grep "eval time")"
-		TOK_GEN_2="$(return_9 ${TOK_GEN_1})"
-		((PREDICT-=(TOK_GEN_1+TOK_GEN_2)))
-	fi
+	init_prompt_chat >> "${FPROMPT}"
 }
 
 spit_predict() {
-	PROG_P=(--prompt-cache ./${ID}/cache
+	PROG_P=(--prompt-cache "${FCACHE}"
 		--prompt-cache-all
-		--file ./${ID}/prompt
-		--n_predict ${PREDICT}
+		--file "${FPROMPT}"
+		--n_predict -2
 		--simple-io
 		"${REV_PROMPTS[@]}"
 		--no-display-prompt)
 
 	if [ "${DEBUG}" ]; then
-		#echo -n "RUNNING: ${PROG[@]} ${PROG_P[@]}"
-		"${PROG[@]}" "${PROG_P[@]}" 2> ./${ID}/log | tee ./${ID}/generated
-		echo
-		echo "EXIT WITH: ${PIPESTATUS[0]}"
-		#cat ./${ID}/log
+		echo -n "RUNNING: ${PROG[@]} ${PROG_P[@]}"
+		${PROG} "${PROG_P[@]}" 2> "${FLOG}" | tee -a "${FPROMPT}"
+		[ "${PIPESTATUS[0]}" -ne "0" ] && exit_fail_log ${PIPESTATUS[0]}
 	else
-		"${PROG[@]}" "${PROG_P[@]}" 2> ./${ID}/log | tee ./${ID}/generated
+		${PROG} "${PROG_P[@]}" 2> "${FLOG}" | tee -a "${FPROMPT}"
+		[ "${PIPESTATUS[0]}" -ne "0" ] && exit_fail_log ${PIPESTATUS[0]}
 	fi
-	GENERATED="$(cat ./${ID}/generated)"
-	mv ./main.log ./${ID}
-	get_tokens_predictable
-	get_tokens_generated
+
+	PROMPT="$(cat "${FPROMPT}")"
+
+	mv ./main.log "${DIR}"
+
 }
 
 spit_cache() {
 	if [ "${BOS}" ]; then
-		cp ./${ID}/prompt ./${ID}/prompt_tmp
-		echo -ne "${BOS}" >> ./${ID}/prompt
+		cp "${FPROMPT}" "${FPROMPT}_tmp"
+		echo -ne "${BOS}" >> "${FPROMPT}"
 	fi
 
-	PROG_P=(--prompt-cache ./${ID}/cache
+	PROG_P=(--prompt-cache "${FCACHE}"
 		--prompt-cache-all
-		--file ./${ID}/prompt
+		--file "${FPROMPT}"
 		--n_predict 1
-		--simple-io)
+		--simple-io
+		--no-display-prompt)
 
 	if [ "${DEBUG}" ]; then
-		#echo -n "RUNNING: ${PROG[@]} ${PROG_P[@]}"
-		"${PROG[@]}" "${PROG_P[@]}" 2> ./${ID}/log
-		echo
-		echo "EXIT WITH: ${PIPESTATUS[0]}"
-		#cat ./${ID}/log
+		echo -n "RUNNING: ${PROG[@]} ${PROG_P[@]}"
+		${PROG} "${PROG_P[@]}" 2> "${FLOG}" || exit_fail_log ${?}
 	else
-		"${PROG[@]}" "${PROG_P[@]}" 2> ./${ID}/log > /dev/null
+		${PROG} "${PROG_P[@]}" 2> "${FLOG}" > /dev/null || exit_fail_log ${?}
 	fi
-	[ "${ID}" ] && mv ./main.log ./${ID}
-	get_tokens_predictable
-	get_tokens_generated
-	[ "${BOS}" ] && mv ./${ID}/prompt_tmp ./${ID}/prompt
+	[ "${1}" ] && mv ./main.log ./${DIR}
+	[ "${BOS}" ] && mv "${FPROMPT}_tmp" "${FPROMPT}"
 }
 
 process_stop_sequence() {
 	SEQ="$(detect_stop_sequence)"
 	if [ "${SEQ}" ]; then
-		SEQ_START="[${SEQ}]"
-		SEQ_STOP="[/${SEQ}]"
-		((STEPS=${#GENERATED}-${#SEQ_START}))
+		SEQ_START="<${SEQ}>"
+		SEQ_STOP="</${SEQ}>"
+		((STEPS=${#PROMPT}-${#SEQ_START}))
 		for STEP in $(seq ${STEPS} -1 0); do
 			((OFFSETL=STEP+${#SEQ_START}))
-			((OFFSETR=${#GENERATED}-${OFFSETL}-${#SEQ_STOP}))
-			if [ "${GENERATED:${STEP}:${#SEQ_START}}" == "${SEQ_START}" ]; then
-				EXEC="${GENERATED:${OFFSETL}:${OFFSETR}}"
+			((OFFSETR=${#PROMPT}-${OFFSETL}-${#SEQ_STOP}))
+			if [ "${PROMPT:${STEP}:${#SEQ_START}}" == "${SEQ_START}" ]; then
+				EXEC="${PROMPT:${OFFSETL}:${OFFSETR}}"
 				break
 			fi
 		done
-		"${SEQ}" "${EXEC}" | tee -a ./${ID}/prompt ./${ID}/output
+		((ENDP=${#EXEC}-1))
+		while [ "${EXEC:${ENDP}:1}" == " " ] || [ "${EXEC:${ENDP}:1}" == $'\n' ]; do
+			EXEC="${EXEC:0:${ENDP}}"
+			((ENDP--))
+		done
+		while [ "${EXEC:0:1}" == " " ] || [ "${EXEC:0:1}" == $'\n' ]; do
+			EXEC="${EXEC:1}"
+		done
+		"${SEQ}" "${EXEC}" | tee -a "${FPROMPT}"
+		PROMPT="$(cat "${FPROMPT}")"
 	fi
 }
 
@@ -194,9 +184,10 @@ stop_on_sequences() {
 detect_stop_sequence() {
 	for EACH in ${STOP_SEQUENCES[@]}; do
 		_EACH="[/${EACH}]"
-		((OFFSETD=${#GENERATED}-${#_EACH}))
-		if [ "${GENERATED:${OFFSETD}:${#_EACH}}" == "${_EACH}" ]; then
+		((OFFSETD=${#PROMPT}-${#_EACH}))
+		if [ "${PROMPT:${OFFSETD}:${#_EACH}}" == "${_EACH}" ]; then
 			echo "${EACH}"
+			break
 		fi
 	done
 }
@@ -207,122 +198,112 @@ stop_on_eos_token() {
 
 remove_eos_token() {
 	if [ "${EOS}" ]; then
-		((OFFSETR=${#GENERATED}-${#EOS}))
-		if [ "${GENERATED:${OFFSETR}:${#EOS}}" == "${EOS}" ]; then
-			GENERATED="${GENERATED:0:${OFFSETR}}"
+		((OFFSETR=${#PROMPT}-${#EOS}))
+		if [ "${PROMPT:${OFFSETR}:${#EOS}}" == "${EOS}" ]; then
+			PROMPT="${PROMPT:0:${OFFSETR}}"
 			REMOVED_EOS_TOKEN=1
 		fi
 	fi
 }
 
-[ "${1}" == "help" ] || [ "${1}" == "-h" ] || [ "${1}" == "--help" ] && \
+options "${@}"
+
+[ "${1}" == "-h" ] || [ "${1}" == "--help" ] && \
 	help_screen && exit 0
 
-[ ! "${1}" ] && help_screen && exit_fail "no ID given!" 1
+[ ! "${ID}" ] && help_screen && exit_fail "no ID given!" 1
 
 [ ! -f "./spit.conf.sh" ] && exit_fail "./spit.conf.sh missing!" 1
 
+[ ! "${SID}" ] && SID=0
+
 . ./spit.conf.sh
 
-[ ! "${PROG[0]}" ] && exit_fail "PROG not set!" 1
-[ ! -f "${PROG[0]}" ] && exit_fail "${PROG[0]} not found!" 1
-[ ! -x "${PROG[0]}" ] && exit_fail "${PROG[0]} not executable!" 1
+SYSTEM="${SYSPROMPT[${SID}]}"
+
+LLAMA="$(return_1 ${PROG})"
+[ ! "${PROG}" ] && exit_fail "PROG not set!" 1
+[ ! -f "$(which ${LLAMA})" ] && exit_fail "${LLAMA} not found!" 1
 
 [ "${EOS}" ] && stop_on_eos_token
 stop_on_sequences
 
-if [ ! -f "./cache" ] && [ "${SYSTEM}${CHAT[0]}" ]; then
+INTERACTIVE=1
+[ "${INPUT}" ] && INTERACTIVE=
+
+FPROMPT="./prompt_${SID}"
+FCACHE="./cache_${SID}"
+FLOG="./log_${SID}"
+if [ ! -f "${FCACHE}" ] && [ "${SYSTEM}${CHAT[0]}" ]; then
+	[ "${INTERACTIVE}" ] && echo "caching..."
 	init_prompt
-	[ ! "${DEBUG}" ] && [ "${INTERACTIVE}" ] && echo -n "creating cache..."
 	spit_cache
-	[ ! "${DEBUG}" ] && [ "${INTERACTIVE}" ] && echo "done."
 fi
+[ ! "${SYSTEM}" ] && touch "${FPROMPT}"
 
-[ ! "${SYSTEM}" ] && touch ./prompt
+OFPROMPT="${FPROMPT}"
+OFCACHE="${FCACHE}"
+OFLOG="${FLOG}"
 
-ID="$(return_1 ${1})"
-ID="$(basename ${ID})"
+DIR="${ID}_${SID}"
+FPROMPT="./${DIR}/prompt"
+FCACHE="./${DIR}/cache"
+FLOG="./${DIR}/log"
+FINPUT="./${DIR}/input"
 
-[ ! -d "./${ID}" ] && mkdir ./${ID}
-[ ! -f "./${ID}/prompt" ] && cp ./prompt ./${ID}/prompt
-[ ! -f "./${ID}/prompt_full" ] && touch ./${ID}/prompt_full
-[ ! -f "./${ID}/cache" ] && [ -f "./cache" ] && cp ./cache ./${ID}/cache
-[ ! -f "./${ID}/log" ] && [ -f "./log" ] && cp ./log ./${ID}/log
+[ ! -d "./${DIR}" ] && mkdir "${DIR}"
+[ ! -f "${FPROMPT}" ] && [ -f "${OFPROMPT}" ] && cp "${OFPROMPT}" "${FPROMPT}"
+[ ! -f "${FCACHE}" ] && [ -f "${OFCACHE}" ] && cp "${OFCACHE}" "${FCACHE}"
+[ ! -f "${FLOG}" ] && [ -f "${OFLOG}" ] && cp "${OFLOG}" "${FLOG}"
 
-get_tokens_predictable
+TCOUNT=0
 
-P1="$(cat ./prompt)"
-P2="$(cat ./${ID}/prompt)"
-
-[ "${#P2}" -gt "${#P1}" ] && get_tokens_generated
-
-if [ "${INST_START_NEXT}" ] && [ ! "${CHAT}" ]; then
-	[ "${#P2}" -gt "${#P1}" ] && INST_START="${INST_START_NEXT}"
-fi
-[ "${INST_START_NEXT}" ] && [ "${CHAT}" ] && INST_START="${INST_START_NEXT}"
-
-if [ "${TEST}" ]; then
-	TCOUNT=0
-	INTERACTIVE=1
-fi
-
-[ ! "${DEBUG}" ] && [ "${INTERACTIVE}" ] && display_chat
+cat "${FPROMPT}"
 
 while true; do
-
 	if [ "${INTERACTIVE}" ]; then
 		read_input
-	elif [ "${2}" ]; then
-		INPUT="${2}"
-	elif [ -f "./${ID}/input" ]; then
-		INPUT="$(cat ./${ID}/input)"
+	elif [ -f "${FINPUT}" ]; then
+		INPUT="$(cat "${FINPUT}")"
 	fi
 
 	[ ! "${INPUT}" ] && exit 0
-	[ "${INPUT}" == ">file" ] && INPUT="$(cat ./${ID}/input)"
 
-	save_input
-
-	spit_cache
-	if [ "$(cat ./${ID}/log | grep "prompt is too long")" ]; then
-		exit_fail "prompt is too long!" 2
+	if [ "${INTERACTIVE}" ] && [ "${INPUT}" == "<file" ]; then
+		if [ ! -f "${FINPUT}" ]; then
+			echo "ERROR: ${FINPUT} not found!"
+		else
+			INPUT="$(cat "${FINPUT}")"
+		fi
 	fi
-
-	[ "${INTERACTIVE}" ] && echo -n "${AI_NAME}:"
-	echo -ne "\n\n${AI_NAME}:" >> ./${ID}/prompt_full
-
-	echo -n > ./${ID}/output
+	save_input
+	INPUT=
+	spit_cache 
 
 	while true; do
-		cp ./${ID}/prompt ./${ID}/prompt_last
+		cp "${FPROMPT}" "${FPROMPT}_last"
 		spit_predict
 		remove_eos_token
-		save_output
-		rm -f ./${ID}/input
-		if [ "${PREDICT}" -lt "1" ]; then
-			exit_fail "reached maximum length!" 2
-		elif [ "$(detect_stop_sequence)" ]; then
-			process_stop_sequence
-			spit_cache
-		elif [ "${REMOVED_EOS_TOKEN}" ]; then
+		echo "${PROMPT}" > "${FPROMPT}"
+		rm -f "${FINPUT}"
+
+		if [ "${REMOVED_EOS_TOKEN}" ]; then
 			REMOVED_EOS_TOKEN=
 			break
-		elif [ "$(cat ./${ID}/log | grep "[end of text]")" ]; then
+		fi
+		if [ "$(detect_stop_sequence)" ]; then
+			process_stop_sequence
+			spit_cache
+		else
 			break
 		fi
 	done
 
-	cat ./${ID}/output >> ./${ID}/prompt_full
+	echo
 
-	((LAST_CHAR=${#GENERATED}-1))
-	if [ "${GENERATED:${LAST_CHAR}}" != "$(echo)" ] || [ ! "${GENERATED}" ]; then
-		echo
-	fi
+	echo -ne "${REPL_END}" >> "${FPROMPT}"
 
-
-	echo -ne "${REPL_END}" >> ./${ID}/prompt
-
-	[ ! "${INTERACTIVE}" ] && echo && break
+	[ ! "${INTERACTIVE}" ] && break
 
 	[ "${INST_START_NEXT}" ] && INST_START="${INST_START_NEXT}" && INST_START_NEXT=
 done
