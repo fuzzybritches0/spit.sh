@@ -1,6 +1,20 @@
 # spit.sh
 
-This script let's you chat with Large Language Models (gguf format) on the console using the great llama.cpp by Georgi Gerganov.
+This script let's you chat with Large Language Models (gguf format) on the console using the great llama.cpp by Georgi Gerganov <https://github.com/ggerganov/llama.cpp>.
+
+```
+HELP
+----
+spit.sh v0.0.2
+
+spit.sh [ -h || --help ]
+spit.sh [ --id CHAT_SESSION_ID ] [ --sysid SYSTEM_ID ] [ INPUT ]
+
+CHAT_ID           an identifier for a new or existing chat session (mandatory)
+SYSTEM_ID         a numeric identifier for the system prompt (if omitted '0' is assumed)
+INPUT             INPUT non-interactively
+-h|--help         show this here help screen
+```
 
 # Setup
 
@@ -9,25 +23,25 @@ Clone this repository:
 git clone https://github.com/fuzzybritches0/spit.sh
 ```
 
-Clone llama.cpp, compile the main executable and copy it into the sub-folder of your LLM in the examples folder:
+Clone llama.cpp, compile the llama-cli executable and put it in the way of $PATH as well as spit.sh:
 ```
 cd spit.sh
 git clone https://github.com/ggerganov/llama.cpp
 cd llama.cpp
-make main
-cp main ../examples/openchat-3.5-0106 (or any other directory containing a valid spit.conf.sh file and the right gguf)
+make llama-cli
+# To use CUDA run instead (install CUDA runtime, adjust spit.conf.sh to use your GPU - use option -ngl [LAYERS]):
+GGML_CUDA=1 make llama-cli
+ln -s ./llama-cli ~/bin/llama-cli
+cd ..
+ln -s ./spit.sh ~/bin/spit.sh
 ```
-Next, download a compatible chat model from huggingface.co and place it in the examples sub-folder. Here follows a list of all the downloadable LLM models in the examples folder:
-```
-https://huggingface.co/TheBloke/dolphin-2.6-mistral-7B-dpo-laser-GGUF/tree/main
-https://huggingface.co/TheBloke/medicine-chat-GGUF/tree/main
-https://huggingface.co/TheBloke/Mixtral-8x7B-Instruct-v0.1-GGUF/tree/main
-https://huggingface.co/TheBloke/openchat-3.5-0106-GGUF/tree/main
-https://huggingface.co/TheBloke/SOLAR-10.7B-Instruct-v1.0-GGUF/tree/main
-```
-I prefer 8 bit quantization. If you want to use a different quantization, however, don't forget to adjust the settings in the spit.conf.sh file. The PROG[@] array holds the name of the 8 bit quantized file name.
+
+I prefer 8 bit quantisation. If you want to use a different quantisation, however, don't forget to adjust the settings in the spit.conf.sh.
 
 Now, run it, like this:
 ```
-../../bin/spit.sh test_chat
+spit.sh --id test_chat
 ```
+
+In each spit.conf.sh, at the beginning, it will attempt to download the necessary gguf files, if they are not present. Make sure it will download the quantised version you prefer. Adjust as required. If the download is corrupted, and you encounter errors when loading the gguf file, remove it, and try again.
+
