@@ -67,7 +67,7 @@ WIKI() {
 	echo -n "${1}" > ./${DIR}/wiki_search
 	RESULTS="$(wiki-cli "${1}")"
 	if [ "${RESULTS}" ]; then
-		echo -ne "${RESULTS}${REPL_END}${REPL_START}\n[SELECT_INDEX]"
+		echo -ne "${RESULTS}${REPL_END}${REPL_START}\n<SELECT_INDEX>"
 	else
 		echo -ne "No results for ${1}!${REPL_END}${REPL_START}"
 	fi
@@ -76,14 +76,14 @@ WIKI() {
 SELECT_INDEX() {
 	if [ -f "./${DIR}/wiki_search" ]; then
 		echo -ne "${REPL_END}${BOS}wiki\n\n"
-		echo -ne "\n[XML]\n"
+		echo -ne "\n<XML>\n"
 		SEARCH="$(cat ./${DIR}/wiki_search)"
 		wiki-cli "${SEARCH}" "${1}"
-		echo -ne "[/XML]"
+		echo -ne "</XML>"
 		echo -ne "${REPL_END}${REPL_START}"
 		rm "./${DIR}/wiki_search"
 	else
-		echo -ne "\nError: Use [WIKI] before [WIKI_SELECT]!${REPL_END}${REPL_START}"
+		echo -ne "\nError: Use <WIKI> before <WIKI_SELECT>!${REPL_END}${REPL_START}"
 	fi
 }
 
