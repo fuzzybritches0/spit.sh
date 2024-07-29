@@ -223,7 +223,7 @@ SYSTEM="${SYSPROMPT[${SID}]}"
 
 LLAMA="$(return_1 ${PROG})"
 [ ! "${PROG}" ] && exit_fail "PROG not set!" 1
-[ ! -f "$(which ${LLAMA})" ] && exit_fail "${LLAMA} not found!" 1
+[ ! "$(which ${LLAMA})" ] && exit_fail "${LLAMA} not found!" 1
 
 [ "${EOS}" ] && stop_on_eos_token
 stop_on_sequences
