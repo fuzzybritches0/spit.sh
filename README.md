@@ -18,12 +18,14 @@ INPUT             INPUT non-interactively
 
 # Setup
 
-Clone this repository:
+Clone this repository and put spit.sh in the way of your $PATH:
 ```
 git clone https://github.com/fuzzybritches0/spit.sh
+cd spit.sh
+ln -s ./spit.sh ~/bin/spit.sh
 ```
 
-Clone llama.cpp, compile the llama-cli executable and put it in the way of $PATH as well as spit.sh:
+Clone llama.cpp, compile the llama-cli executable and put it in the way of $PATH:
 ```
 cd spit.sh
 git clone https://github.com/ggerganov/llama.cpp
@@ -33,7 +35,6 @@ make llama-cli
 GGML_CUDA=1 make llama-cli
 ln -s ./llama-cli ~/bin/llama-cli
 cd ..
-ln -s ./spit.sh ~/bin/spit.sh
 ```
 
 I prefer 8 bit quantisation. If you want to use a different quantisation, however, don't forget to adjust the settings in the spit.conf.sh.
