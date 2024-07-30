@@ -177,7 +177,7 @@ process_stop_sequence() {
 
 stop_on_sequences() {
 	for EACH in ${STOP_SEQUENCES[@]}; do
-		REV_PROMPTS=(${REV_PROMPTS[@]} --reverse-prompt "[/${EACH}]")
+		REV_PROMPTS=(${REV_PROMPTS[@]} --reverse-prompt "</${EACH}>")
 	done
 }
 
