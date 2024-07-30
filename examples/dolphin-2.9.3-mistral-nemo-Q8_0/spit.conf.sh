@@ -13,6 +13,6 @@ REPL_END="${EOS}\n"
 
 #DEBUG=1
 
-PROG="llama-cli --model ./dolphin-2.9.3-mistral-nemo-Q8_0.gguf"
+PROG="llama-cli --ctx-size 32768 --override-kv tokenizer.ggml.pre=str:tekken --model ./dolphin-2.9.3-mistral-nemo-Q8_0.gguf"
 
 . ../sysprompts/sysprompt0.sh
