@@ -183,7 +183,7 @@ stop_on_sequences() {
 
 detect_stop_sequence() {
 	for EACH in ${STOP_SEQUENCES[@]}; do
-		_EACH="[/${EACH}]"
+		_EACH="</${EACH}>"
 		((OFFSETD=${#PROMPT}-${#_EACH}))
 		if [ "${PROMPT:${OFFSETD}:${#_EACH}}" == "${_EACH}" ]; then
 			echo "${EACH}"
