@@ -52,18 +52,18 @@ STOP_SEQUENCES=("WIKI" "SELECT_INDEX" "SEARCH" "READ_URL" "EXECUTE")
 
 EXECUTE() {
 	[ ! -d "./${DIR}/env" ] && mkdir ./${DIR}/env
-	echo -ne "${REPL_END}${BOS}execute\n\n"
+	echo -ne "${REPL_END}${REPL_START} "
 	echo "${1}" > ./${DIR}/EXECUTE
 	chmod u+x ./${DIR}/EXECUTE
 	cd ./${DIR}/env
 	../EXECUTE 2>&1
 	EXIT_CODE="${?}"
 	rm ../EXECUTE
-	echo -ne "\nEXIT CODE: ${EXIT_CODE}${REPL_END}${REPL_START}"
+	echo -ne "\nEXIT CODE: ${EXIT_CODE}</OUTPUT>${REPL_END}${REPL_START}"
 }
 
 WIKI() {
-	echo -ne "${REPL_END}${BOS}wiki\n\n"
+	echo -ne "${REPL_END}${REPL_START} "
 	echo -n "${1}" > ./${DIR}/wiki_search
 	RESULTS="$(wiki-cli "${1}")"
 	if [ "${RESULTS}" ]; then
@@ -75,7 +75,7 @@ WIKI() {
 
 SELECT_INDEX() {
 	if [ -f "./${DIR}/wiki_search" ]; then
-		echo -ne "${REPL_END}${BOS}wiki\n\n"
+		echo -ne "${REPL_END}${REPL_START} "
 		echo -ne "\n<XML>\n"
 		SEARCH="$(cat ./${DIR}/wiki_search)"
 		wiki-cli "${SEARCH}" "${1}"
@@ -88,13 +88,13 @@ SELECT_INDEX() {
 }
 
 SEARCH() {
-	echo -ne "${REPL_END}${BOS}search\n\n"
+	echo -ne "${REPL_END}${REPL_START} "
 	ddgr --json "${1}"
 	echo -ne "${REPL_END}${REPL_START}"
 }
 
 READ_URL() {
-	echo -ne "${REPL_END}${BOS}read_url\n\n"
+	echo -ne "${REPL_END}${REPL_START} "
 	w3m -dump_source "${1}"
 	echo -ne "${REPL_END}${REPL_START}"
 }
