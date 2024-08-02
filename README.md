@@ -21,11 +21,11 @@ INPUT             INPUT non-interactively
 Clone this repository and put spit.sh in the way of your $PATH:
 ```
 git clone https://github.com/fuzzybritches0/spit.sh
-cd spit.sh
-ln -s ./spit.sh ~/bin/spit.sh
+cd ~/bin
+ln -s ../path_to_your_copy_of/spit.sh/bin/spit.sh spit.sh
 ```
 
-Clone llama.cpp, compile the llama-cli executable and put it in the way of $PATH:
+Clone llama.cpp, compile the llama-cli executable and put it in the way of your $PATH:
 ```
 cd spit.sh
 git clone https://github.com/ggerganov/llama.cpp
@@ -33,11 +33,11 @@ cd llama.cpp
 make llama-cli
 # To use CUDA run instead (install CUDA runtime, adjust spit.conf.sh to use your GPU - use option -ngl [LAYERS]):
 GGML_CUDA=1 make llama-cli
-ln -s ./llama-cli ~/bin/llama-cli
-cd ..
+cd ~/bin
+ln -s ../paht_to_your_copy_of/llama.cpp/llama-cli llama-cli
 ```
 
-I prefer 8 bit quantisation. If you want to use a different quantisation, however, don't forget to adjust the settings in the spit.conf.sh.
+I prefer 8 bit quantisation. If you want to use a different quantisation, however, don't forget to adjust the settings in spit.conf.sh.
 
 Now, run it, like this:
 ```
