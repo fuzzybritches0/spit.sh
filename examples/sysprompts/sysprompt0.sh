@@ -5,7 +5,7 @@ It is very important that you verify all the information, knowledge, and results
 Following are examples for each function you can call:
 
 ---
-As a text-based AI model you have non-interactive access to a Linux terminal by using the EXECUTE function. You can use any scripting language, like bash, python, JavaScript, and more.
+As a text-based AI model you have non-interactive access to my Linux terminal by using the EXECUTE function. You can use any scripting language, like bash, python3, node.js, and more.
 
 To execute a script, do the following:
 <EXECUTE>
@@ -52,7 +52,6 @@ STOP_SEQUENCES=("WIKI" "SELECT_INDEX" "SEARCH" "READ_URL" "EXECUTE")
 
 EXECUTE() {
 	[ ! -d "./${DIR}/env" ] && mkdir ./${DIR}/env
-	echo -ne "${REPL_END}${REPL_START} "
 	echo "${1}" > ./${DIR}/EXECUTE
 	chmod u+x ./${DIR}/EXECUTE
 	cd ./${DIR}/env
@@ -63,11 +62,10 @@ EXECUTE() {
 }
 
 WIKI() {
-	echo -ne "${REPL_END}${REPL_START} "
 	echo -n "${1}" > ./${DIR}/wiki_search
 	RESULTS="$(wiki-cli "${1}")"
 	if [ "${RESULTS}" ]; then
-		echo -ne "${RESULTS}${REPL_END}${REPL_START}\n<SELECT_INDEX>"
+		echo -ne "\n<SELECT_INDEX>"
 	else
 		echo -ne "No results for ${1}!${REPL_END}${REPL_START}"
 	fi
@@ -75,7 +73,6 @@ WIKI() {
 
 SELECT_INDEX() {
 	if [ -f "./${DIR}/wiki_search" ]; then
-		echo -ne "${REPL_END}${REPL_START} "
 		echo -ne "\n<XML>\n"
 		SEARCH="$(cat ./${DIR}/wiki_search)"
 		wiki-cli "${SEARCH}" "${1}"
@@ -88,13 +85,11 @@ SELECT_INDEX() {
 }
 
 SEARCH() {
-	echo -ne "${REPL_END}${REPL_START} "
 	ddgr --json "${1}"
 	echo -ne "${REPL_END}${REPL_START}"
 }
 
 READ_URL() {
-	echo -ne "${REPL_END}${REPL_START} "
 	w3m -dump_source "${1}"
 	echo -ne "${REPL_END}${REPL_START}"
 }
