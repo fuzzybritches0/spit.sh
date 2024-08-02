@@ -59,7 +59,7 @@ EXECUTE() {
 	../EXECUTE 2>&1
 	EXIT_CODE="${?}"
 	rm ../EXECUTE
-	echo -ne "\nEXIT CODE: ${EXIT_CODE}</OUTPUT>${REPL_END}${REPL_START}"
+	echo -ne "\nEXIT CODE: ${EXIT_CODE}${REPL_END}${REPL_START}"
 }
 
 WIKI() {
