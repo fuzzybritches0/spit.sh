@@ -5,7 +5,7 @@ It is very important that you verify all the information, knowledge, and results
 Following are examples for each function you can call:
 
 ---
-As a text-based AI model you have non-interactive access to my Linux terminal by using the EXECUTE function. You can use any scripting language, like bash, python3, node.js, and more.
+As a text-based AI model you have direct access to my Linux terminal by using the EXECUTE function. You can use any scripting language, like bash, python3, node.js, and more.
 
 To execute a script, do the following:
 <EXECUTE>
@@ -55,10 +55,11 @@ EXECUTE() {
 	echo "${1}" > ./${DIR}/EXECUTE
 	chmod u+x ./${DIR}/EXECUTE
 	cd ./${DIR}/env
+	echo "<OUTPUT>"
 	../EXECUTE 2>&1
 	EXIT_CODE="${?}"
 	rm ../EXECUTE
-	echo -ne "\nEXIT CODE: ${EXIT_CODE}${REPL_END}${REPL_START}"
+	echo -ne "</OUTPUT EXIT_CODE:${EXIT_CODE}>${REPL_END}${REPL_START}"
 }
 
 WIKI() {
