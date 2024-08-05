@@ -103,6 +103,7 @@ init_prompt() {
 
 spit_predict() {
 	PROG_P=(--prompt-cache "${FCACHE}"
+		--mlock
 		--prompt-cache-all
 		--file "${FPROMPT}"
 		--n_predict -2
@@ -132,6 +133,7 @@ spit_cache() {
 	fi
 
 	PROG_P=(--prompt-cache "${FCACHE}"
+		--mlock
 		--prompt-cache-all
 		--file "${FPROMPT}"
 		--n_predict 1
