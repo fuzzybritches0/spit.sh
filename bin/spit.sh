@@ -56,7 +56,7 @@ exit_fail_log() {
 }
 
 read_input() {
-	echo -n "$ "
+	echo -ne "\n$ "
 	if [ "${TEST[${TCOUNT}]}" ]; then
 		echo "${TEST[${TCOUNT}]}"
 		INPUT="${TEST[${TCOUNT}]}"
@@ -104,7 +104,7 @@ spit_predict() {
 		--mlock
 		--prompt-cache-all
 		--file "${FPROMPT}"
-		--n_predict -2
+		--predict -2
 		--simple-io
 		"${REV_PROMPTS[@]}"
 		--no-display-prompt)
@@ -134,7 +134,7 @@ spit_cache() {
 		--mlock
 		--prompt-cache-all
 		--file "${FPROMPT}"
-		--n_predict 1
+		--predict 1
 		--simple-io
 		--no-display-prompt)
 
