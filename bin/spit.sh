@@ -278,7 +278,6 @@ while true; do
 	fi
 	save_input
 	INPUT=
-	spit_cache 
 
 	while true; do
 		cp "${FPROMPT}" "${FPROMPT}_last"
@@ -293,7 +292,6 @@ while true; do
 		fi
 		if [ "$(detect_stop_sequence)" ]; then
 			process_stop_sequence
-			spit_cache
 		else
 			break
 		fi
