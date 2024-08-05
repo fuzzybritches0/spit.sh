@@ -46,3 +46,6 @@ spit.sh --id test_chat
 
 In each spit.conf.sh, at the beginning, it will attempt to download the necessary gguf files, if they are not present. Make sure it will download the quantised version you prefer. Adjust as required. If the download is corrupted, and you encounter errors when loading the gguf file, remove it, and try again.
 
+For the WIKI function to work, you need <https://github.com/fuzzybritches0/wiki-cli>. Clone it and put the wiki-cli script in the way of your $PATH.
+
+For the READ_URL function you need w3m to be installed (apt install w3m). For the SEARCH function you need ddgr to be installed (apt install ddgr).
