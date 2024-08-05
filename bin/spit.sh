@@ -56,7 +56,6 @@ exit_fail_log() {
 }
 
 read_input() {
-	echo
 	echo -n "$ "
 	if [ "${TEST[${TCOUNT}]}" ]; then
 		echo "${TEST[${TCOUNT}]}"
@@ -65,7 +64,6 @@ read_input() {
 	else
 		read INPUT
 	fi
-	echo
 }
 
 save_input() {
@@ -203,9 +201,10 @@ remove_eos_token() {
 		((OFFSETR=${#PROMPT}-${#EOS}))
 		if [ "${PROMPT:${OFFSETR}:${#EOS}}" == "${EOS}" ]; then
 			PROMPT="${PROMPT:0:${OFFSETR}}"
-			REMOVED_EOS_TOKEN=1
+			return 0
 		fi
 	fi
+	return 1
 }
 
 options "${@}"
@@ -284,12 +283,10 @@ while true; do
 	while true; do
 		cp "${FPROMPT}" "${FPROMPT}_last"
 		spit_predict
-		remove_eos_token
-		echo "${PROMPT}" > "${FPROMPT}"
 		rm -f "${FINPUT}"
 
-		if [ "${REMOVED_EOS_TOKEN}" ]; then
-			REMOVED_EOS_TOKEN=
+		if remove_eos_token; then
+			echo -ne "${PROMPT}" > "${FPROMPT}"
 			break
 		fi
 		if [ "$(detect_stop_sequence)" ]; then
@@ -298,8 +295,6 @@ while true; do
 			break
 		fi
 	done
-
-	echo
 
 	echo -ne "${REPL_END}" >> "${FPROMPT}"
 
