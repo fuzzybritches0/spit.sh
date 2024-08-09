@@ -218,6 +218,7 @@ options "${@}"
 
 [ ! "${SID}" ] && SID=0
 
+DIR="${ID}_${SID}"
 . ./spit.conf.sh
 
 SYSTEM="${SYSPROMPT[${SID}]}"
@@ -246,7 +247,6 @@ OFPROMPT="${FPROMPT}"
 OFCACHE="${FCACHE}"
 OFLOG="${FLOG}"
 
-DIR="${ID}_${SID}"
 FPROMPT="./${DIR}/prompt"
 FCACHE="./${DIR}/cache"
 FLOG="./${DIR}/log"
