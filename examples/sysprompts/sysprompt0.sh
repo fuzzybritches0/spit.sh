@@ -29,6 +29,11 @@ To inspect the OUTPUT of a process, do the following:
 3488765
 </ASYNC_OUTPUT>
 
+To provide INPUT to a process, do the following:
+<ASYNC_INPUT>
+3488765 This is the input to the process
+</ASYNC_INPUT>
+
 You can call this function as often as you need. This function works in succession, as the output becomes available.
 
 You can kill a process by using the ASYNC_KILL function, if it does not end for other reasons.
@@ -66,73 +71,93 @@ Following is a description of your person:
 You do your best to be kind, humble, conscientious, and honest. You are very intelligent and you have the ability to think in a very detailed and comprehensive fashion.
 You aid and enhance your reasoning capabilities by writing python scripts that solve these reasoning tasks. You make it possible for me to retrace your chain of thoughts by commenting your python code rigorously."
 
-STOP_SEQUENCES=("EXECUTE" "ASYNC_EXECUTE" "ASYNC_OUTPUT" "ASYNC_KILL" "WIKI" "SELECT_INDEX" "SEARCH" "READ_URL")
+STOP_SEQUENCES=("EXECUTE" "ASYNC_EXECUTE" "ASYNC_OUTPUT" "ASYNC_INPUT" "ASYNC_KILL" "WIKI" "SELECT_INDEX" "SEARCH" "READ_URL")
 
-[ -d "./${DIR}/env/.async_execute" ] && rm -rf ./${DIR}/env/.async_execute
+EXECD=".execdir"
+EXECDIR="./${DIR}/env/${EXECD}"
+
+return_1() {
+	echo "${1}"
+}
 
 EXECUTE() {
 	[ ! -d "./${DIR}/env" ] && mkdir ./${DIR}/env
-	echo "${1}" > ./${DIR}/EXECUTE
-	chmod u+x ./${DIR}/EXECUTE
+	echo -n "${1}" > ./${EXECDIR}/EXECUTE
+	chmod u+x ./${EXECDIR}/EXECUTE
 	cd ./${DIR}/env
 	echo "<OUTPUT>"
-	../EXECUTE 2>&1
+	./${EXECD}/EXECUTE 2>&1
 	EXIT_CODE="${?}"
-	rm ../EXECUTE
+	rm ./${EXECD}/EXECUTE
 	echo -ne "</OUTPUT EXIT_CODE:${EXIT_CODE}>${REPL_END}${REPL_START}"
 }
 
-_ASYNC_WAIT() {
-	wait ${1}
-	rm -f ./${DIR}/env/.async_execute/${1}
-	rm -f ./${DIR}/env/.async_execute/${1}_PID
-	rm -f ./${DIR}/env/.async_execute/${1}_POS
-}
-
 ASYNC_EXECUTE() {
-	[ ! -d "./${DIR}/env/.async_execute" ] && mkdir -p ./${DIR}/env/.async_execute
 	EXEC="${RANDOM}"
-	while [ -f "./${DIR}/env/.async_execute/${EXEC}" ]; do
+	while [ -e "${EXECDIR}/${EXEC}_EXE" ]; do
 		EXEC="${RANDOM}"
 	done
-	echo "${1}" > ./${DIR}/${EXEC}
-	chmod u+x ./${DIR}/${EXEC}
-	cd ./${DIR}/env
-	../${EXEC} 2>&1 > ./${DIR}/env/.async_execute/${EXEC} &
-	ASYNCPID="${1}"
-	echo -n "${ASYNCPID}" > ./${DIR}/env/.async_execute/${EXEC}_PID
-	echo -n "0" > ./${DIR}/env/.async_execute/${EXEC}_POS
-	_ASYNC_WAIT ${ASYNCPID} &
-	echo "<ASYNC_EXECUTE_ID:${EXEC}>${REPL_END}${REPL_START}"
+	echo -n "${1}" > "${EXECDIR}/${EXEC}_EXE"
+	chmod ugo+x "${EXECDIR}/${EXEC}_EXE"
+	echo -n "0" > "${EXECDIR}/${EXEC}_POS"
+	echo "${EXEC}" > "${EXECDIR}/fifo"
+	echo -ne "<ASYNC_EXECUTE_ID:${EXEC}>${REPL_END}${REPL_START}"
+}
+
+ASYNC_INPUT() {
+	ASYNCPID="$(return_1 ${1})"
+	((NASYNCPID=${#ASYNCPID}+1))
+	INPUT="${1:${NASYNCPID}}"
+	if [ -e "${EXECDIR}/${ASYNCPID}" ]; then
+		if [ -d "/proc/${ASYNCPID}" ]; then
+			PID="$(cat "${EXECDIR}/${ASYNCPID}_PID")"
+			echo "${INPUT}" > /proc/${PID}/fd/0 && echo -ne "<OK>${REPL_END}${REPL_START}"
+		else
+			echo -ne "${ASYNCPID} not running!${REPL_END}${REPL_START}"
+		fi
+	else
+		echo -ne "${ASYNCPID} not running!${REPL_END}${REPL_START}"
+	fi
 }
 
 ASYNC_OUTPUT() {
-	if [ -f "./${DIR}/env/.async_execute/${1}_POS" ] && \
-		[ -f "./${DIR}/env/.async_execute/${1}" ]; then
-		COUNT="$(cat ./${DIR}/env/.async_execute/${1}_OUTPOS)"
-		ASYNCOUT="$(tail -c +${COUNT} ./${DIR}/env/.async_execute/${1})"
+	if [ -e "${EXECDIR}/${1}_POS" ]; then
+		COUNT="$(cat "${EXECDIR}//${1}_POS")"
+		ASYNCOUT="$(tail -c +${COUNT} "${EXECDIR}/${1}_OUT")"
 		((COUNT+=${#ASYNCOUT}))
-		echo -n "${COUNT}" > ./${DIR}/env/.async_execute/${1}_POS
-		echo "<OUTPUT>"
+		((COUNT++))
+		echo -n "${COUNT}" > "${EXECDIR}/${1}_POS"
+		echo -n "<OUTPUT>"
 		echo -n "${ASYNCOUT}"
-		echo "</OUTPUT>"
+		echo -ne "</OUTPUT>${REPL_END}${REPL_START}"
 	else
-		echo "Job ${1} not found!"
+		if [ -e "${EXECDIR}/${1}_OUT" ]; then
+			echo -ne "Job has ended!<OUTPUT>\n"
+			cat "${EXECDIR}/${1}_OUT"
+			if [ -f "${EXECDIR}/${1}_EXITCODE" ]; then
+				EXITCODE="$(cat "${EXECDIR}/${1}_EXITCODE")"
+				EXITCODE=" EXIT_CODE:${EXITCODE}"
+			fi
+			echo -ne "</OUTPUT${EXITCODE}>${REPL_END}${REPL_START}"
+		else
+			echo -ne "Job ${1} not running!${REPL_END}${REPL_START}"
+		fi
 	fi
 }
 
 ASYNC_KILL() {
-	if [ -f "./${DIR}/env/.async_execute/${1}" ]; then
-		EXECPID="$(cat ./${DIR}/env/.async_execute/${1})"
-		kill ${EXECPID} 2>&1 > /dev/null && echo "ID ${1} killed!"
-		rm -f ./${DIR}/env/.async_execute/${1}
-		rm -f ./${DIR}/env/.async_execute/${1}_PID
-		rm -f ./${DIR}/env/.async_execute/${1}_POS
+	if [ -e "${EXECDIR}/${1}_PID" ]; then
+		ASYNCPID="$(cat "${EXECDIR}/${1}_PID")"
+		if [ -d "/proc/${ASYNCPID}" ]; then
+			kill ${ASYNCPID} 2>&1 > /dev/null
+			echo -ne "Process killed!${REPL_END}${REPL_START}"
+		else
+			echo -ne "Job ${1} not running!${REPL_END}${REPL_START}"
+		fi
 	else
-		echo "Job ${1} not found!"
+		echo -ne "Job ${1} not running!${REPL_END}${REPL_START}"
 	fi
 }
-
 
 WIKI() {
 	echo -n "${1}" > ./${DIR}/wiki_search
@@ -145,7 +170,7 @@ WIKI() {
 }
 
 SELECT_INDEX() {
-	if [ -f "./${DIR}/wiki_search" ]; then
+	if [ -e "./${DIR}/wiki_search" ]; then
 		echo -ne "\n<XML>\n"
 		SEARCH="$(cat ./${DIR}/wiki_search)"
 		wiki-cli "${SEARCH}" "${1}"
