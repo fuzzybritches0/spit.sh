@@ -76,6 +76,15 @@ STOP_SEQUENCES=("EXECUTE" "ASYNC_EXECUTE" "ASYNC_OUTPUT" "ASYNC_INPUT" "ASYNC_KI
 EXECD=".execdir"
 EXECDIR="./${DIR}/env/${EXECD}"
 
+RUN_ON_START() {
+	async_exec.sh ${ID} ${SID} &
+	ASYNC_EXEC_PID="${!}"
+}
+
+RUN_ON_EXIT() {
+	kill "${ASYNC_EXEC_PID}"
+}
+
 return_1() {
 	echo "${1}"
 }
