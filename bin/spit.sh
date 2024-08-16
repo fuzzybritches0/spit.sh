@@ -214,12 +214,14 @@ options "${@}"
 
 [ ! "${ID}" ] && help_screen && exit_fail "no ID given!" 1
 
-[ ! -f "./spit.conf.sh" ] && exit_fail "./spit.conf.sh missing!" 1
+[ ! -e "./spit.conf.sh" ] && exit_fail "./spit.conf.sh missing!" 1
 
 [ ! "${SID}" ] && SID=0
 
 DIR="${ID}_${SID}"
 . ./spit.conf.sh
+
+[ "$(type RUN_ON_START 2> /dev/null | grep "is a function")" ] && RUN_ON_START
 
 SYSTEM="${SYSPROMPT[${SID}]}"
 
@@ -236,7 +238,7 @@ INTERACTIVE=1
 FPROMPT="./prompt_${SID}"
 FCACHE="./cache_${SID}"
 FLOG="./log_${SID}"
-if [ ! -f "${FCACHE}" ] && [ "${SYSTEM}${CHAT[0]}" ]; then
+if [ ! -e "${FCACHE}" ] && [ "${SYSTEM}${CHAT[0]}" ]; then
 	[ "${INTERACTIVE}" ] && echo "caching..."
 	init_prompt
 	spit_cache
@@ -253,9 +255,9 @@ FLOG="./${DIR}/log"
 FINPUT="./${DIR}/input"
 
 [ ! -d "./${DIR}" ] && mkdir "${DIR}"
-[ ! -f "${FPROMPT}" ] && [ -f "${OFPROMPT}" ] && cp "${OFPROMPT}" "${FPROMPT}"
-[ ! -f "${FCACHE}" ] && [ -f "${OFCACHE}" ] && cp "${OFCACHE}" "${FCACHE}"
-[ ! -f "${FLOG}" ] && [ -f "${OFLOG}" ] && cp "${OFLOG}" "${FLOG}"
+[ ! -e "${FPROMPT}" ] && [ -e "${OFPROMPT}" ] && cp "${OFPROMPT}" "${FPROMPT}"
+[ ! -e "${FCACHE}" ] && [ -e "${OFCACHE}" ] && cp "${OFCACHE}" "${FCACHE}"
+[ ! -e "${FLOG}" ] && [ -e "${OFLOG}" ] && cp "${OFLOG}" "${FLOG}"
 
 TCOUNT=0
 
@@ -264,14 +266,17 @@ cat "${FPROMPT}"
 while true; do
 	if [ "${INTERACTIVE}" ]; then
 		read_input
-	elif [ -f "${FINPUT}" ]; then
+	elif [ -e "${FINPUT}" ]; then
 		INPUT="$(cat "${FINPUT}")"
 	fi
 
-	[ ! "${INPUT}" ] && exit 0
+	if [ ! "${INPUT}" ]; then
+		[ "$(type RUN_ON_EXIT 2> /dev/null | grep "is a function")" ] && RUN_ON_EXIT
+		exit 0
+	fi
 
 	if [ "${INTERACTIVE}" ] && [ "${INPUT}" == "<file" ]; then
-		if [ ! -f "${FINPUT}" ]; then
+		if [ ! -e "${FINPUT}" ]; then
 			echo "ERROR: ${FINPUT} not found!"
 		else
 			INPUT="$(cat "${FINPUT}")"
@@ -298,7 +303,10 @@ while true; do
 
 	echo -ne "${REPL_END}" >> "${FPROMPT}"
 
-	[ ! "${INTERACTIVE}" ] && break
+	if [ ! "${INTERACTIVE}" ]; then
+		[ "$(type RUN_ON_EXIT 2> /dev/null | grep "is a function")" ] && RUN_ON_EXIT
+		break
+	fi
 
 	[ "${INST_START_NEXT}" ] && INST_START="${INST_START_NEXT}" && INST_START_NEXT=
 done
