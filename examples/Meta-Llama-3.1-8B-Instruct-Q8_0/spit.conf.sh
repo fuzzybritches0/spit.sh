@@ -1,3 +1,5 @@
+[ ! -f "Meta-Llama-3.1-8B-Instruct-Q8_0.gguf" ] && wget https://huggingface.co/lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-Q8_0.gguf?download=true -O ./Meta-Llama-3.1-8B-Instruct-Q8_0.gguf
+
 #PROMPT_TEMPLATE
 BOT="<|begin_of_text|>"
 EOT="<|eot_id|>"
