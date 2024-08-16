@@ -77,7 +77,7 @@ EXECD=".execdir"
 EXECDIR="./${DIR}/env/${EXECD}"
 
 RUN_ON_START() {
-	async_exec.sh ${ID} ${SID} &
+	ASYNC_EXEC ${ID} ${SID} &
 	ASYNC_EXEC_PID="${!}"
 }
 
@@ -99,6 +99,35 @@ EXECUTE() {
 	EXIT_CODE="${?}"
 	rm ./${EXECD}/EXECUTE
 	echo -ne "</OUTPUT EXIT_CODE:${EXIT_CODE}>${REPL_END}${REPL_START}"
+}
+
+_ASYNC_EXEC() {
+	"./${EXECD}/${EXEC}_EXE" 2>&1 > "./${EXECD}/${EXEC}_OUT"
+	echo "${?}" > "./${EXECD}/${EXEC}_EXITCODE"
+	rm -f "./${EXECD}/${EXEC}_EXE"
+	rm -f "./${EXECD}/${EXEC}_PID"
+	rm -f "./${EXECD}/${EXEC}_POS"
+}
+
+ASYNC_EXEC() {
+	FIFO="${EXECDIR}/fifo"
+	RETDIR="${PWD}"
+	WDIR="${DIR}/env"
+	[ ! -d "${EXECDIR}" ] && mkdir -p "${EXECDIR}"
+	rm -f ${FIFO} && mkfifo "${FIFO}"
+
+	while true; do
+		read EXEC < "${FIFO}" || exit 1
+		if [ -x "${EXECDIR}/${EXEC}_EXE" ]; then
+			cd "${WDIR}"
+			_ASYNC_EXEC &
+			ASYNCPID="${!}"
+			disown ${ASYNCPID}
+			cd "${RETDIR}"
+			echo ${ASYNCPID} > "${EXECDIR}/${EXEC}_PID"
+			echo "0" > "${EXECDIR}/${EXEC}_POS"
+		fi
+	done
 }
 
 ASYNC_EXECUTE() {
