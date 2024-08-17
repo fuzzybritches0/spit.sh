@@ -22,21 +22,22 @@ The EXECUTE function is blocking. This means that any process running without ex
 
 node server.js
 </ASYNC_EXECUTE>
-<ASYNC_EXECUTE_ID:3488765>
+<PROCESS_ID:3488765>
+When interacting with the process, use the corresponding PROCESS_ID.
 
-To inspect the OUTPUT of a process, do the following:
+To inspect the OUTPUT of the process, do the following:
 <ASYNC_OUTPUT>
 3488765
 </ASYNC_OUTPUT>
 
-To provide INPUT to a process, do the following:
+To provide INPUT to the process, do the following:
 <ASYNC_INPUT>
 3488765 This is the input to the process
 </ASYNC_INPUT>
 
 You can call this function as often as you need. This function works in succession, as the output becomes available.
 
-You can kill a process by using the ASYNC_KILL function, if it does not end for other reasons.
+You can kill the process by using the ASYNC_KILL function, if it does not end for other reasons.
 <ASYNC_KILL>
 3488765
 </ASYNC_KILL>
@@ -76,17 +77,18 @@ STOP_SEQUENCES=("EXECUTE" "ASYNC_EXECUTE" "ASYNC_OUTPUT" "ASYNC_INPUT" "ASYNC_KI
 EXECD=".execdir"
 EXECDIR="./${DIR}/env/${EXECD}"
 
+return_1() {
+	echo ${1}
+}
+
 RUN_ON_START() {
 	ASYNC_EXEC ${ID} ${SID} &
 	ASYNC_EXEC_PID="${!}"
+	disown ${ASYNC_EXEC_PID}
 }
 
 RUN_ON_EXIT() {
 	kill "${ASYNC_EXEC_PID}"
-}
-
-return_1() {
-	echo "${1}"
 }
 
 EXECUTE() {
@@ -102,7 +104,8 @@ EXECUTE() {
 }
 
 _ASYNC_EXEC() {
-	"./${EXECD}/${EXEC}_EXE" 2>&1 > "./${EXECD}/${EXEC}_OUT"
+	mkfifo "./${EXECD}/${EXEC}_IN"
+	"./${EXECD}/${EXEC}_EXE" 2>&1 > "./${EXECD}/${EXEC}_OUT" < "./${EXECD}/${EXEC}_IN"
 	echo "${?}" > "./${EXECD}/${EXEC}_EXITCODE"
 	rm -f "./${EXECD}/${EXEC}_EXE"
 	rm -f "./${EXECD}/${EXEC}_PID"
@@ -121,10 +124,10 @@ ASYNC_EXEC() {
 		if [ -x "${EXECDIR}/${EXEC}_EXE" ]; then
 			cd "${WDIR}"
 			_ASYNC_EXEC &
-			ASYNCPID="${!}"
-			disown ${ASYNCPID}
+			PID="${!}"
+			disown ${PID}
 			cd "${RETDIR}"
-			echo ${ASYNCPID} > "${EXECDIR}/${EXEC}_PID"
+			echo -n "${PID}" > "${EXECDIR}/${EXEC}_PID"
 			echo "0" > "${EXECDIR}/${EXEC}_POS"
 		fi
 	done
@@ -139,22 +142,23 @@ ASYNC_EXECUTE() {
 	chmod ugo+x "${EXECDIR}/${EXEC}_EXE"
 	echo -n "0" > "${EXECDIR}/${EXEC}_POS"
 	echo "${EXEC}" > "${EXECDIR}/fifo"
-	echo -ne "<ASYNC_EXECUTE_ID:${EXEC}>${REPL_END}${REPL_START}"
+	echo -ne "<PROCESS_ID:${EXEC}>${REPL_END}${REPL_START}"
 }
 
 ASYNC_INPUT() {
-	ASYNCPID="$(return_1 ${1})"
-	((NASYNCPID=${#ASYNCPID}+1))
-	INPUT="${1:${NASYNCPID}}"
-	if [ -e "${EXECDIR}/${ASYNCPID}" ]; then
-		if [ -d "/proc/${ASYNCPID}" ]; then
-			PID="$(cat "${EXECDIR}/${ASYNCPID}_PID")"
-			echo "${INPUT}" > /proc/${PID}/fd/0 && echo -ne "<OK>${REPL_END}${REPL_START}"
+	ASYNCID="$(return_1 ${1})"
+	((OFFIN=${#ASYNCID}+1))
+	INPUT="${1:${OFFIN}}"
+	if [ -e "${EXECDIR}/${ASYNCID}_PID" ]; then
+		PID="$(cat "${EXECDIR}/${ASYNCID}_PID")"
+		if [ -d "/proc/${PID}" ]; then
+			echo "${INPUT}" > "${EXECDIR}/${ASYNCID}_IN" && \
+				echo -ne "<OK>${REPL_END}${REPL_START}"
 		else
-			echo -ne "${ASYNCPID} not running!${REPL_END}${REPL_START}"
+			echo -ne "${ASYNCID} not running!${REPL_END}${REPL_START}"
 		fi
 	else
-		echo -ne "${ASYNCPID} not running!${REPL_END}${REPL_START}"
+		echo -ne "${ASYNCID} not running!${REPL_END}${REPL_START}"
 	fi
 }
 
