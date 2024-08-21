@@ -1,46 +1,47 @@
-SYSPROMPT[0]="You are in a text-only chat conversation with me. Please, assist me and fulfil my requests and tasks to the best of your knowledge.
+SYSPROMPT[0]="You are my personal assistant. We are in a text-only chat conversation. Please assist me!
 
-It is very important that you verify all the information, knowledge, and results you share with me. To aid you with that, you have some functions at your disposal. If applicable, use them instead of trusting your mental faculties. This way mistakes can be avoided and your performance improved further.
+You have functions available to improve your capabilities, accuracy, and performance.
 
-Following are examples for each function you can call:
+Following are examples for each function:
 
 ---
-As a text-based AI model you have direct access to my Linux terminal by using the EXECUTE and ASYNC_EXECUTE functions. You can use any scripting language, like bash, python3, node.js, and more.
+As a text-only AI model you have direct access to my Linux terminal.
 
-To execute a script, do the following:
-<EXECUTE>
+To run a script, do the following:
+<RUN_SCRIPT>
 #!/bin/bash
 
 echo \"Hello World!\"
-</EXECUTE>
+</RUN_SCRIPT>
+<PID:3488765>
 
-Always include the shebang at the beginning of the script, so the system knows which interpreter to use. You can use the EXECUTE function to find out the current date. Use the 'date' command to do so. You can also use the 'bc' command to check all of your arithmetic operations you perform for correctness. After the execution you will be provided with the OUTPUT and the EXIT CODE. An EXIT CODE of 0 means the execution was successful, even if the output is empty.
+Always include the shebang at the beginning of the script, so the system knows which interpreter to choose. Use `/usr/bin/env` to select the interpreter. You have many options, among them are: bash, python, node, perl, ...
+After invoking the script, you will be given a PID. Use this PID to obtain the output and be able to interact with it by providing input.
 
-The EXECUTE function is blocking. This means that any process running without exiting will block you from continuing. Use ASYNC_EXECUTE for processes you want to have running in the background:
-<ASYNC_EXECUTE>
+To retrieve the output for a given PID, do the following:
+<RUN_OUTPUT>
+3488765
+</RUN_OUTPUT>
+
+To run a script interactively, do the following:
+<RUN_SCRIPT_I>
 #!/bin/bash
 
-node server.js
-</ASYNC_EXECUTE>
-<PROCESS_ID:3488765>
-When interacting with the process, use the corresponding PROCESS_ID.
+echo -n \"Enter your name: \"
+read name
+echo \"Your name is ${name}!\"
+</RUN_SCRIPT_I>
+<PID:34587>
 
-To inspect the OUTPUT of the process, do the following:
-<ASYNC_OUTPUT>
+To provide INPUT for a given interactive PID, do the following:
+<RUN_INPUT>
+34587 John Doe
+</RUN_INPUT>
+
+To stop a interactive or non-interactive running script, do the following:
+<RUN_END>
 3488765
-</ASYNC_OUTPUT>
-
-To provide INPUT to the process, do the following:
-<ASYNC_INPUT>
-3488765 This is the input to the process
-</ASYNC_INPUT>
-
-You can call this function as often as you need. This function works in succession, as the output becomes available.
-
-You can kill the process by using the ASYNC_KILL function, if it does not end for other reasons.
-<ASYNC_KILL>
-3488765
-</ASYNC_KILL>
+</RUN_END>
 
 ---
 You can use the following function, WIKI, to find information on Wikipedia.
@@ -53,7 +54,7 @@ Albert Einstein
 ---
 You can use the following function, SEARCH, to find information on the Internet.
 
-If you want to search the Internet for places to buy LED light bulbs, say, do the following:
+If you want to search the Internet for places to buy LED light bulbs, do the following:
 <SEARCH>
 buy LED light bulbs
 </SEARCH>
@@ -72,132 +73,138 @@ Following is a description of your person:
 You do your best to be kind, humble, conscientious, and honest. You are very intelligent and you have the ability to think in a very detailed and comprehensive fashion.
 You aid and enhance your reasoning capabilities by writing python scripts that solve these reasoning tasks. You make it possible for me to retrace your chain of thoughts by commenting your python code rigorously."
 
-STOP_SEQUENCES=("EXECUTE" "ASYNC_EXECUTE" "ASYNC_OUTPUT" "ASYNC_INPUT" "ASYNC_KILL" "WIKI" "SELECT_INDEX" "SEARCH" "READ_URL")
+STOP_SEQUENCES=("RUN_SCRIPT" "RUN_SCRIPT_I" "RUN_OUTPUT" "RUN_INPUT" "RUN_END" "WIKI" "SELECT_INDEX" "SEARCH" "READ_URL")
 
-EXECD=".execdir"
-EXECDIR="./${DIR}/env/${EXECD}"
+RUND=".run"
+RUNDIR="./${DIR}/env/${RUND}"
 
 return_1() {
 	echo ${1}
 }
 
 RUN_ON_START() {
-	ASYNC_EXEC ${ID} ${SID} &
-	ASYNC_EXEC_PID="${!}"
-	disown ${ASYNC_EXEC_PID}
+	BGRUN ${ID} ${SID} &
+	BGRUN_PID="${!}"
 }
 
 RUN_ON_EXIT() {
-	kill "${ASYNC_EXEC_PID}"
+	kill "${BGRUN_PID}"
 }
 
-EXECUTE() {
-	[ ! -d "./${DIR}/env" ] && mkdir ./${DIR}/env
-	echo -n "${1}" > ./${EXECDIR}/EXECUTE
-	chmod u+x ./${EXECDIR}/EXECUTE
-	cd ./${DIR}/env
-	echo "<OUTPUT>"
-	./${EXECD}/EXECUTE 2>&1
-	EXIT_CODE="${?}"
-	rm ./${EXECD}/EXECUTE
-	echo -ne "</OUTPUT EXIT_CODE:${EXIT_CODE}>${REPL_END}${REPL_START}"
+_BGRUN() {
+	echo -n "0" > "./${RUND}/${RUN}_POS"
+	if [ -e "./${RUND}/${RUN}_IN" ]; then
+		"./${RUND}/${RUN}_EXE" 2>&1 > "./${RUND}/${RUN}_OUT" < "./${RUND}/${RUN}_IN" &
+		PID="${!}"
+		echo "${PID}" > "./${RUND}/${RUN}_PID"
+		wait "${PID}"
+		echo "${?}" > "./${RUND}/${RUN}_EXITCODE"
+	else
+		"./${RUND}/${RUN}_EXE" 2>&1 > "./${RUND}/${RUN}_OUT" &
+		PID="${!}"
+		echo "${PID}" > "./${RUND}/${RUN}_PID"
+		wait "${PID}"
+		echo "${?}" > "./${RUND}/${RUN}_EXITCODE"
+	fi
+	rm -f "./${RUND}/${RUN}_EXE"
+	rm -f "./${RUND}/${RUN}_PID"
+	rm -f "./${RUND}/${RUN}_POS"
+	rm -f "./${RUND}/${RUN}_IN"
 }
 
-_ASYNC_EXEC() {
-	mkfifo "./${EXECD}/${EXEC}_IN"
-	"./${EXECD}/${EXEC}_EXE" 2>&1 > "./${EXECD}/${EXEC}_OUT" < "./${EXECD}/${EXEC}_IN"
-	echo "${?}" > "./${EXECD}/${EXEC}_EXITCODE"
-	rm -f "./${EXECD}/${EXEC}_EXE"
-	rm -f "./${EXECD}/${EXEC}_PID"
-	rm -f "./${EXECD}/${EXEC}_POS"
-}
-
-ASYNC_EXEC() {
-	FIFO="${EXECDIR}/fifo"
-	RETDIR="${PWD}"
-	WDIR="${DIR}/env"
-	[ ! -d "${EXECDIR}" ] && mkdir -p "${EXECDIR}"
+BGRUN() {
+	[ ! -d "${RUNDIR}" ] && mkdir -p "${RUNDIR}"
+	cd "${DIR}/env"
+	FIFO="./${RUND}/fifo"
 	rm -f ${FIFO} && mkfifo "${FIFO}"
 
 	while true; do
-		read EXEC < "${FIFO}" || exit 1
-		if [ -x "${EXECDIR}/${EXEC}_EXE" ]; then
-			cd "${WDIR}"
-			_ASYNC_EXEC &
-			PID="${!}"
-			disown ${PID}
-			cd "${RETDIR}"
-			echo -n "${PID}" > "${EXECDIR}/${EXEC}_PID"
-			echo "0" > "${EXECDIR}/${EXEC}_POS"
+		read RUN < "${FIFO}"
+		if [ -x "./${RUND}/${RUN}_EXE" ]; then
+			_BGRUN &
 		fi
 	done
 }
 
-ASYNC_EXECUTE() {
-	EXEC="${RANDOM}"
-	while [ -e "${EXECDIR}/${EXEC}_EXE" ]; do
-		EXEC="${RANDOM}"
+RUN_SCRIPT_I() {
+	RUN="${RANDOM}"
+	while [ -e "${RUNDIR}/${RUN}_EXE" ]; do
+		RUN="${RANDOM}"
 	done
-	echo -n "${1}" > "${EXECDIR}/${EXEC}_EXE"
-	chmod ugo+x "${EXECDIR}/${EXEC}_EXE"
-	echo -n "0" > "${EXECDIR}/${EXEC}_POS"
-	echo "${EXEC}" > "${EXECDIR}/fifo"
-	echo -ne "<PROCESS_ID:${EXEC}>${REPL_END}${REPL_START}"
+	echo -n "${1}" > "${RUNDIR}/${RUN}_EXE"
+	chmod ugo+x "${RUNDIR}/${RUN}_EXE"
+	mkfifo "${RUNDIR}/${RUN}_IN"
+	echo -n "0" > "${RUNDIR}/${RUN}_POS"
+	echo "${RUN}" > "${RUNDIR}/fifo"
+	echo -ne "<PID:${RUN}>${REPL_END}${REPL_START}"
 }
 
-ASYNC_INPUT() {
-	ASYNCID="$(return_1 ${1})"
-	((OFFIN=${#ASYNCID}+1))
+RUN_SCRIPT() {
+	RUN="${RANDOM}"
+	while [ -e "${RUNDIR}/${RUN}_EXE" ]; do
+		RUN="${RANDOM}"
+	done
+	echo -n "${1}" > "${RUNDIR}/${RUN}_EXE"
+	chmod ugo+x "${RUNDIR}/${RUN}_EXE"
+	echo -n "0" > "${RUNDIR}/${RUN}_POS"
+	echo "${RUN}" > "${RUNDIR}/fifo"
+	echo -ne "<PID:${RUN}>${REPL_END}${REPL_START}"
+}
+
+RUN_INPUT() {
+	RUN="$(return_1 ${1})"
+	((OFFIN=${#RUN}+1))
 	INPUT="${1:${OFFIN}}"
-	if [ -e "${EXECDIR}/${ASYNCID}_PID" ]; then
-		PID="$(cat "${EXECDIR}/${ASYNCID}_PID")"
+	if [ -e "${RUNDIR}/${RUN}_PID" ] && [ -e "${RUNDIR}/${RUN}_IN" ]; then
+		PID="$(cat "${RUNDIR}/${RUN}_PID")"
 		if [ -d "/proc/${PID}" ]; then
-			echo "${INPUT}" > "${EXECDIR}/${ASYNCID}_IN" && \
-				echo -ne "<OK>${REPL_END}${REPL_START}"
+			echo "${INPUT}" > "${RUNDIR}/${RUN}_IN" && \
+				echo -ne "\n<INPUT OK>${REPL_END}${REPL_START}"
 		else
-			echo -ne "${ASYNCID} not running!${REPL_END}${REPL_START}"
+			echo -ne "\n<ERROR:${RUN} not running!>${REPL_END}${REPL_START}"
 		fi
 	else
-		echo -ne "${ASYNCID} not running!${REPL_END}${REPL_START}"
+		echo -ne "\n<ERROR:${RUN} not running or not interactive!>${REPL_END}${REPL_START}"
 	fi
 }
 
-ASYNC_OUTPUT() {
-	if [ -e "${EXECDIR}/${1}_POS" ]; then
-		COUNT="$(cat "${EXECDIR}//${1}_POS")"
-		ASYNCOUT="$(tail -c +${COUNT} "${EXECDIR}/${1}_OUT")"
-		((COUNT+=${#ASYNCOUT}))
+RUN_OUTPUT() {
+	if [ -e "${RUNDIR}/${1}_POS" ]; then
+		COUNT="$(cat "${RUNDIR}//${1}_POS")"
+		RUNCOUT="$(tail -c +${COUNT} "${RUNDIR}/${1}_OUT")"
+		((COUNT+=${#RUNCOUT}))
 		((COUNT++))
-		echo -n "${COUNT}" > "${EXECDIR}/${1}_POS"
-		echo -n "<OUTPUT>"
-		echo -n "${ASYNCOUT}"
+		echo -n "${COUNT}" > "${RUNDIR}/${1}_POS"
+		echo "<OUTPUT>"
+		echo "${RUNCOUT}"
 		echo -ne "</OUTPUT>${REPL_END}${REPL_START}"
 	else
-		if [ -e "${EXECDIR}/${1}_OUT" ]; then
-			echo -ne "Job has ended!<OUTPUT>\n"
-			cat "${EXECDIR}/${1}_OUT"
-			if [ -f "${EXECDIR}/${1}_EXITCODE" ]; then
-				EXITCODE="$(cat "${EXECDIR}/${1}_EXITCODE")"
+		if [ -e "${RUNDIR}/${1}_OUT" ]; then
+			echo "<OUTPUT>"
+			cat "${RUNDIR}/${1}_OUT"
+			EXITCODE=
+			if [ -f "${RUNDIR}/${1}_EXITCODE" ]; then
+				EXITCODE="$(cat "${RUNDIR}/${1}_EXITCODE")"
 				EXITCODE=" EXIT_CODE:${EXITCODE}"
 			fi
 			echo -ne "</OUTPUT${EXITCODE}>${REPL_END}${REPL_START}"
 		else
-			echo -ne "Job ${1} not running!${REPL_END}${REPL_START}"
+			echo -ne "<ERROR:Job ${1} not found!>${REPL_END}${REPL_START}"
 		fi
 	fi
 }
 
-ASYNC_KILL() {
-	if [ -e "${EXECDIR}/${1}_PID" ]; then
-		ASYNCPID="$(cat "${EXECDIR}/${1}_PID")"
-		if [ -d "/proc/${ASYNCPID}" ]; then
-			kill ${ASYNCPID} 2>&1 > /dev/null
-			echo -ne "Process killed!${REPL_END}${REPL_START}"
+RUN_END() {
+	if [ -e "${RUNDIR}/${1}_PID" ]; then
+		RUNPID="$(cat "${RUNDIR}/${1}_PID")"
+		if [ -d "/proc/${RUNPID}" ]; then
+			kill ${RUNPID} 2>&1 > /dev/null
+			echo -ne "<ENDED OK>${REPL_END}${REPL_START}"
 		else
-			echo -ne "Job ${1} not running!${REPL_END}${REPL_START}"
+			echo -ne "<ERROR:Job ${1} not running!>${REPL_END}${REPL_START}"
 		fi
 	else
-		echo -ne "Job ${1} not running!${REPL_END}${REPL_START}"
+		echo -ne "<ERROR:Job ${1} not running!>${REPL_END}${REPL_START}"
 	fi
 }
 
@@ -207,20 +214,19 @@ WIKI() {
 	if [ "${RESULTS}" ]; then
 		echo -ne "\n<SELECT_INDEX>"
 	else
-		echo -ne "No results for ${1}!${REPL_END}${REPL_START}"
+		echo -ne "\n<WIKI: No results for ${1}!>${REPL_END}${REPL_START}"
 	fi
 }
 
 SELECT_INDEX() {
 	if [ -e "./${DIR}/wiki_search" ]; then
-		echo -ne "\n<XML>\n"
+		echo "\n<XML>"
 		SEARCH="$(cat ./${DIR}/wiki_search)"
 		wiki-cli "${SEARCH}" "${1}"
-		echo -ne "</XML>"
-		echo -ne "${REPL_END}${REPL_START}"
+		echo -ne "\n</XML>${REPL_END}${REPL_START}"
 		rm "./${DIR}/wiki_search"
 	else
-		echo -ne "\nError: Use <WIKI> before <WIKI_SELECT>!${REPL_END}${REPL_START}"
+		echo -ne "\n<ERROR: Use <WIKI> before <WIKI_SELECT>>!${REPL_END}${REPL_START}"
 	fi
 }
 
