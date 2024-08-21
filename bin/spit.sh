@@ -261,7 +261,7 @@ FINPUT="./${DIR}/input"
 
 TCOUNT=0
 
-cat "${FPROMPT}"
+[ "${INTERACTIVE}" ] && cat "${FPROMPT}"
 
 while true; do
 	if [ "${INTERACTIVE}" ]; then
