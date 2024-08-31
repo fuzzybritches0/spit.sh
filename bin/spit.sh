@@ -56,9 +56,9 @@ exit_fail_log() {
 }
 
 read_input() {
-	echo -ne "\n$ "
+	echo -ne "${INST_START}"
 	if [ "${TEST[${TCOUNT}]}" ]; then
-		echo "${TEST[${TCOUNT}]}"
+		echo -n "${TEST[${TCOUNT}]}"
 		INPUT="${TEST[${TCOUNT}]}"
 		((TCOUNT++))
 	else
@@ -283,6 +283,7 @@ while true; do
 		fi
 	fi
 	save_input
+	[ "${INTERACTIVE}" ] && cat "${FPROMPT}"
 	INPUT=
 
 	while true; do
@@ -301,6 +302,7 @@ while true; do
 		fi
 	done
 
+	[ "${INTERACTIVE}" ] && echo -ne "${REPL_END}"
 	echo -ne "${REPL_END}" >> "${FPROMPT}"
 
 	if [ ! "${INTERACTIVE}" ]; then
