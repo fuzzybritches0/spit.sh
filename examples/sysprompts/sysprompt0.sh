@@ -1,50 +1,84 @@
 SYSPROMPT[0]="You are my personal assistant. We are in a text-only chat conversation. Please assist me!
 
-You have functions available to improve your capabilities, accuracy, and performance.
+You have tools available to improve your capabilities, accuracy, and performance.
 
-Following are examples for each function:
+The tool call syntax follows a simple rule. Every tool call has a start and end tag:
+<TOOL_CALL>
+</TOOL_CALL>
+
+Each tag needs to be on its own line. The parser will ignore them or misbehave otherwise.
+
+Use those tags only if you want to use a tool. If you just want to refer to a tool, use TOOL_CALL. 
+
+Following are examples for each tool call:
 
 ---
-As a text-only AI model you have direct access to my Linux terminal.
+As a text-only AI model you have direct access to my Linux terminal with the following tool calls:
 
-To run a script, do the following:
-<RUN_SCRIPT>
+To run a script on my system, do:
+<RUN_SYNC>
 #!/bin/bash
 
 echo \"Hello World!\"
-</RUN_SCRIPT>
-<PID:3488765>
+</RUN_SYNC>
 
-Always include the shebang at the beginning of the script, so the system knows which interpreter to choose. Use `/usr/bin/env` to select the interpreter. You have many options, among them are: bash, python, node, perl, ...
-After invoking the script, you will be given a PID. Use this PID to obtain the output and be able to interact with it by providing input.
+Hello World!
+EXIT_CODE:0
+
+The RUN_SYNC tool call is blocking you until it ends.
+
+To run a script asynchronously, do: 
+<RUN_ASYNC>
+#!/bin/bash
+
+echo \"Hello World!\"
+</RUN_ASYNC>
+
+PID:3488765
 
 To retrieve the output for a given PID, do the following:
-<RUN_OUTPUT>
+<ASYNC_OUTPUT>
 3488765
-</RUN_OUTPUT>
+</ASYNC_OUTPUT>
 
-To run a script interactively, do the following:
-<RUN_SCRIPT_I>
+To run a script asynchronously and interactively, do the following:
+<RUN_ASYNC_I>
 #!/bin/bash
 
 echo -n \"Enter your name: \"
 read name
-echo \"Your name is ${name}!\"
-</RUN_SCRIPT_I>
-<PID:34587>
+echo \"Your name is \${name}!\"
+</RUN_ASYNC_I>
+
+PID:34587
 
 To provide INPUT for a given interactive PID, do the following:
-<RUN_INPUT>
+<ASYNC_INPUT>
 34587 John Doe
-</RUN_INPUT>
+</ASYNC_INPUT>
 
-To stop a interactive or non-interactive running script, do the following:
-<RUN_END>
+To force an asynchronously running script to end, do the following:
+<ASYNC_END>
 3488765
-</RUN_END>
+</ASYNC_END>
+
+Always include the shebang at the beginning of the script, so the system knows which interpreter to choose. Use #!/bin/env [interpreter] for any interpreter other than bash (use #!/bin/bash). Check first if the interpreter is installed, before trying to use it.
 
 ---
-You can use the following function, WIKI, to find information on Wikipedia.
+You can use the SAVE_FILE tool call to permanently save any type of file on the system.
+<SAVE_FILE>
+./some/directory/structure/test.txt
+Hello! This is the first line of the content of test.txt
+Note that the filename to store the file comes before the content, right after the SAVE_FILE tool call.
+This is the third line.
+
+This is the last line of test.txt.
+</SAVE_FILE>
+
+The directory structure will be created if it does not exist. There is no need for you to create it. Make sure that the filename you want to use
+
+---
+You can use the following tool to find information on Wikipedia.
 
 To find the Wikipedia article about Albert Einstein, for example, do the following:
 <WIKI>
@@ -52,7 +86,7 @@ Albert Einstein
 </WIKI>
 
 ---
-You can use the following function, SEARCH, to find information on the Internet.
+You can use the following tool to find information on the Internet.
 
 If you want to search the Internet for places to buy LED light bulbs, do the following:
 <SEARCH>
@@ -60,20 +94,20 @@ buy LED light bulbs
 </SEARCH>
 
 ---
-You can use the following function, READ_URL, to read URLs:
+You can use the following tool to read URLs:
 
 <READ_URL>
 https://buyledlights.com
 </READ_URL>
 
-The SEARCH and READ_URL functions give you access to recent and current information.
 ---
+The SEARCH and READ_URL functions give you access to recent and current information.
 
-Following is a description of your person:
+Following is a description of your personality:
 You do your best to be kind, humble, conscientious, and honest. You are very intelligent and you have the ability to think in a very detailed and comprehensive fashion.
-You aid and enhance your reasoning capabilities by writing python scripts that solve these reasoning tasks. You make it possible for me to retrace your chain of thoughts by commenting your python code rigorously."
+You aid and enhance your reasoning capabilities by writing python scripts that solve these reasoning tasks. You make it possible for me to retrace your chain of thoughts by commenting your python code."
 
-STOP_SEQUENCES=("RUN_SCRIPT" "RUN_SCRIPT_I" "RUN_OUTPUT" "RUN_INPUT" "RUN_END" "WIKI" "SELECT_INDEX" "SEARCH" "READ_URL")
+STOP_SEQUENCES=("RUN_SYNC" "RUN_ASYNC" "RUN_ASYNC_I" "ASYNC_OUTPUT" "ASYNC_INPUT" "ASYNC_END" "SAVE_FILE" "WIKI" "SELECT_INDEX" "SEARCH" "READ_URL")
 
 RUND=".run"
 RUNDIR="./${DIR}/env/${RUND}"
@@ -94,13 +128,13 @@ RUN_ON_EXIT() {
 _BGRUN() {
 	echo -n "0" > "./${RUND}/${RUN}_POS"
 	if [ -e "./${RUND}/${RUN}_IN" ]; then
-		"./${RUND}/${RUN}_EXE" 2>&1 > "./${RUND}/${RUN}_OUT" < "./${RUND}/${RUN}_IN" &
+		"./${RUND}/${RUN}_EXE" > "./${RUND}/${RUN}_OUT" 2>&1 < "./${RUND}/${RUN}_IN" &
 		PID="${!}"
 		echo "${PID}" > "./${RUND}/${RUN}_PID"
 		wait "${PID}"
 		echo "${?}" > "./${RUND}/${RUN}_EXITCODE"
 	else
-		"./${RUND}/${RUN}_EXE" 2>&1 > "./${RUND}/${RUN}_OUT" &
+		"./${RUND}/${RUN}_EXE" > "./${RUND}/${RUN}_OUT" 2>&1 &
 		PID="${!}"
 		echo "${PID}" > "./${RUND}/${RUN}_PID"
 		wait "${PID}"
@@ -126,7 +160,29 @@ BGRUN() {
 	done
 }
 
-RUN_SCRIPT_I() {
+RUN_SYNC() {
+	echo "${1}" > "${RUNDIR}/RUN_SCRIPT_OUTPUT"
+	chmod u+x "${RUNDIR}/RUN_SCRIPT_OUTPUT"
+	cd "${DIR}/env"
+	echo -ne "${TOOL_START}"
+	./${RUND}/RUN_SCRIPT_OUTPUT 2>&1
+	echo -ne "EXITCODE: ${?}${TOOL_END}${REPL_START}"
+	rm "./${RUND}/RUN_SCRIPT_OUTPUT" 
+}
+
+RUN_ASYNC() {
+	RUN="${RANDOM}"
+	while [ -e "${RUNDIR}/${RUN}_EXE" ]; do
+		RUN="${RANDOM}"
+	done
+	echo -n "${1}" > "${RUNDIR}/${RUN}_EXE"
+	chmod ugo+x "${RUNDIR}/${RUN}_EXE"
+	echo -n "0" > "${RUNDIR}/${RUN}_POS"
+	echo "${RUN}" > "${RUNDIR}/fifo"
+	echo -ne "${TOOL_START}PID:${RUN}${TOOL_END}${REPL_START}"
+}
+
+RUN_ASYNC_I() {
 	RUN="${RANDOM}"
 	while [ -e "${RUNDIR}/${RUN}_EXE" ]; do
 		RUN="${RANDOM}"
@@ -136,22 +192,10 @@ RUN_SCRIPT_I() {
 	mkfifo "${RUNDIR}/${RUN}_IN"
 	echo -n "0" > "${RUNDIR}/${RUN}_POS"
 	echo "${RUN}" > "${RUNDIR}/fifo"
-	echo -ne "<PID:${RUN}>${REPL_END}${REPL_START}"
+	echo -ne "${TOOL_START}PID:${RUN}${TOOL_END}${REPL_START}"
 }
 
-RUN_SCRIPT() {
-	RUN="${RANDOM}"
-	while [ -e "${RUNDIR}/${RUN}_EXE" ]; do
-		RUN="${RANDOM}"
-	done
-	echo -n "${1}" > "${RUNDIR}/${RUN}_EXE"
-	chmod ugo+x "${RUNDIR}/${RUN}_EXE"
-	echo -n "0" > "${RUNDIR}/${RUN}_POS"
-	echo "${RUN}" > "${RUNDIR}/fifo"
-	echo -ne "<PID:${RUN}>${REPL_END}${REPL_START}"
-}
-
-RUN_INPUT() {
+ASYNC_INPUT() {
 	RUN="$(return_1 ${1})"
 	((OFFIN=${#RUN}+1))
 	INPUT="${1:${OFFIN}}"
@@ -159,83 +203,101 @@ RUN_INPUT() {
 		PID="$(cat "${RUNDIR}/${RUN}_PID")"
 		if [ -d "/proc/${PID}" ]; then
 			echo "${INPUT}" > "${RUNDIR}/${RUN}_IN" && \
-				echo -ne "\n<INPUT OK>${REPL_END}${REPL_START}"
+				echo -ne "${TOOL_START}INPUT OK${TOOL_END}${REPL_START}"
 		else
-			echo -ne "\n<ERROR:${RUN} not running!>${REPL_END}${REPL_START}"
+			echo -ne "${TOOL_START}PID ${RUN} NOT RUNNING!${TOOL_END}${REPL_START}"
 		fi
 	else
-		echo -ne "\n<ERROR:${RUN} not running or not interactive!>${REPL_END}${REPL_START}"
+		echo -ne "${TOOL_START}PID ${RUN} NOT RUNNING OR NOT INTERACTIVE!${TOOL_END}${REPL_START}"
 	fi
 }
 
-RUN_OUTPUT() {
+ASYNC_OUTPUT() {
 	if [ -e "${RUNDIR}/${1}_POS" ]; then
 		COUNT="$(cat "${RUNDIR}//${1}_POS")"
 		RUNCOUT="$(tail -c +${COUNT} "${RUNDIR}/${1}_OUT")"
 		((COUNT+=${#RUNCOUT}))
 		((COUNT++))
 		echo -n "${COUNT}" > "${RUNDIR}/${1}_POS"
-		echo "<OUTPUT>"
+		echo -ne "${TOOL_START}"
 		echo "${RUNCOUT}"
-		echo -ne "</OUTPUT>${REPL_END}${REPL_START}"
+		echo -ne "${TOOL_END}${REPL_START}"
 	else
 		if [ -e "${RUNDIR}/${1}_OUT" ]; then
-			echo "<OUTPUT>"
+			echo -ne "${TOOL_START}"
 			cat "${RUNDIR}/${1}_OUT"
 			EXITCODE=
 			if [ -f "${RUNDIR}/${1}_EXITCODE" ]; then
 				EXITCODE="$(cat "${RUNDIR}/${1}_EXITCODE")"
-				EXITCODE=" EXIT_CODE:${EXITCODE}"
+				EXITCODE="EXIT_CODE:${EXITCODE}"
 			fi
-			echo -ne "</OUTPUT${EXITCODE}>${REPL_END}${REPL_START}"
+			echo -ne "${EXITCODE}${TOOL_END}${REPL_START}"
 		else
-			echo -ne "<ERROR:Job ${1} not found!>${REPL_END}${REPL_START}"
+			echo -ne "${TOOL_START}PID ${1} NOT RUNNING!${TOOL_END}${REPL_START}"
 		fi
 	fi
 }
 
-RUN_END() {
+ASYNC_END() {
 	if [ -e "${RUNDIR}/${1}_PID" ]; then
 		RUNPID="$(cat "${RUNDIR}/${1}_PID")"
 		if [ -d "/proc/${RUNPID}" ]; then
-			kill ${RUNPID} 2>&1 > /dev/null
-			echo -ne "<ENDED OK>${REPL_END}${REPL_START}"
+			kill ${RUNPID} > /dev/null 2>&1
+			echo -ne "${TOOL_START}PID ${1} ENDED!${TOOL_END}${REPL_START}"
 		else
-			echo -ne "<ERROR:Job ${1} not running!>${REPL_END}${REPL_START}"
+			echo -ne "${TOOL_START}PID ${1} NOT RUNNING!${TOOL_END}${REPL_START}"
 		fi
 	else
-		echo -ne "<ERROR:Job ${1} not running!>${REPL_END}${REPL_START}"
+		echo -ne "${TOOL_START}PID ${1} NOT RUNNING!${TOOL_END}${REPL_START}"
 	fi
+}
+
+SAVE_FILE() {
+	cd "${DIR}/env"
+	COUNT=0
+	echo "${1}" | while IFS= read -r LINE; do
+		if [ "${COUNT}" -eq "0" ]; then
+			FILE="${LINE}"
+			[ "${FILE:0:1}" == "/" ] && FILE=".${FILE}"
+			mkdir -p "$(dirname "${FILE}")"
+			echo -n > "${FILE}"
+		fi
+		[ "${COUNT}" -gt "0" ] && echo "${LINE}" >> "${FILE}"
+		((COUNT++))
+	done
+	echo -ne "${TOOL_START}FILE SAVED!${TOOL_END}${REPL_START}"
 }
 
 WIKI() {
 	echo -n "${1}" > ./${DIR}/wiki_search
 	RESULTS="$(wiki-cli "${1}")"
 	if [ "${RESULTS}" ]; then
-		echo -ne "\n<SELECT_INDEX>"
+		echo -ne "${TOOL_START}PLEASE SELECT INDEX!${TOOL_END}${REPL_START}<SELECT_INDEX>"
 	else
-		echo -ne "\n<WIKI: No results for ${1}!>${REPL_END}${REPL_START}"
+		echo -ne "${TOOL_START}NO RESULT FOR ${1}!${TOOL_END}${REPL_START}"
 	fi
 }
 
 SELECT_INDEX() {
 	if [ -e "./${DIR}/wiki_search" ]; then
-		echo "\n<XML>"
+		echo -ne "${TOOL_START}<XML>"
 		SEARCH="$(cat ./${DIR}/wiki_search)"
 		wiki-cli "${SEARCH}" "${1}"
-		echo -ne "\n</XML>${REPL_END}${REPL_START}"
+		echo -ne "</XML>${TOOL_END}${REPL_START}"
 		rm "./${DIR}/wiki_search"
 	else
-		echo -ne "\n<ERROR: Use <WIKI> before <WIKI_SELECT>>!${REPL_END}${REPL_START}"
+		echo -ne "${TOOL_START}USE <WIKI> BEFORE <WIKI_SELECT>!${TOOL_END}${REPL_START}"
 	fi
 }
 
 SEARCH() {
+	echo -ne "${TOOL_START}"
 	ddgr --json "${1}"
-	echo -ne "${REPL_END}${REPL_START}"
+	echo -ne "${TOOL_END}${REPL_START}"
 }
 
 READ_URL() {
+	echo -ne "${TOOL_START}"
 	w3m -dump_source "${1}"
-	echo -ne "${REPL_END}${REPL_START}"
+	echo -ne "${TOOL_END}${REPL_START}"
 }
