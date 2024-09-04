@@ -261,7 +261,7 @@ FINPUT="./${DIR}/input"
 
 TCOUNT=0
 
-[ "${INTERACTIVE}" ] && cat "${FPROMPT}"
+[ "${INTERACTIVE}" ] && printf "\e[?47h" && cat "${FPROMPT}"
 
 while true; do
 	if [ "${INTERACTIVE}" ]; then
@@ -272,6 +272,7 @@ while true; do
 
 	if [ ! "${INPUT}" ]; then
 		[ "$(type RUN_ON_EXIT 2> /dev/null | grep "is a function")" ] && RUN_ON_EXIT
+		[ "${INTERACTIVE}" ] && printf "\e[?47l"
 		exit 0
 	fi
 
@@ -283,7 +284,7 @@ while true; do
 		fi
 	fi
 	save_input
-	[ "${INTERACTIVE}" ] && cat "${FPROMPT}"
+	[ "${INTERACTIVE}" ] && clear && cat "${FPROMPT}"
 	INPUT=
 
 	while true; do
@@ -302,8 +303,8 @@ while true; do
 		fi
 	done
 
-	[ "${INTERACTIVE}" ] && echo -ne "${REPL_END}"
 	echo -ne "${REPL_END}" >> "${FPROMPT}"
+	[ "${INTERACTIVE}" ] && clear && cat "${FPROMPT}"
 
 	if [ ! "${INTERACTIVE}" ]; then
 		[ "$(type RUN_ON_EXIT 2> /dev/null | grep "is a function")" ] && RUN_ON_EXIT
