@@ -21,6 +21,7 @@ options() {
 	COUNT=1
 	for OPTION in "${@}"; do
 		((COUNT++))
+		[ "${OPTION}" == "--continue" ] && CONTINUE=1 && LCOUNT="${COUNT}" && continue
 		[ "${OPTION}" == "--id" ] && ID="${@:${COUNT}:1}" && LCOUNT="${COUNT}" && continue
 		[ "${OPTION}" == "--sysid" ] && SID="${@:${COUNT}:1}" &&\
 			LCOUNT="${COUNT}" && continue
@@ -36,12 +37,13 @@ help_screen() {
 	echo "spit.sh v0.0.2"
 	echo
 	echo "${0} [ -h || --help ]"
-	echo "${0} [ --id CHAT_SESSION_ID ] [ --sysid SYSTEM_ID ] [ INPUT ]"
+	echo "${0} [ --id CHAT_SESSION_ID ] [ --sysid SYSTEM_ID ] [--continue] [ INPUT ]"
 	echo
 	echo "CHAT_ID           an identifier for a new or existing chat session (mandatory)"
 	echo "SYSTEM_ID         a numeric identifier for the system prompt (if omitted '0' is assumed)"
 	echo "INPUT             INPUT non-interactively"
 	echo "-h|--help         show this here help screen"
+	echo "--continue	continue generation/don't ask for input"
 	echo
 }
 
@@ -51,17 +53,35 @@ exit_fail() {
 }
 
 exit_fail_log() {
-	cat ./log_${SID}
+	if [ -f "./log_${SID}" ]; then
+		cat ./log_${SID}
+	elif [ -f "../log" ]; then
+		cat ../log
+	fi
 	exit ${1}
 }
 
+interactive_display() {
+	if [ "${INTERACTIVE}" ]; then
+		clear
+		if [ "${CHATINTRO[${SID}]}" ]; then
+			echo "# ASSISTANT:" | lowdown -tterm
+			echo "${CHATINTRO[${SID}]}" | lowdown -tterm
+			cat "${FCHAT}" | render.sh
+		fi
+	fi
+}
+
 read_input() {
-	echo -ne "${INST_START}"
+	[ "${INTERACTIVE}" ] && echo
 	if [ "${TEST[${TCOUNT}]}" ]; then
 		echo -n "${TEST[${TCOUNT}]}"
 		INPUT="${TEST[${TCOUNT}]}"
 		((TCOUNT++))
+	elif [ "$(which rlwrap)" ]; then
+		INPUT="$(rlwrap -pGREEN -S "$ " -o cat)"
 	else
+		echo -ne "$ "
 		read INPUT
 	fi
 }
@@ -71,6 +91,7 @@ save_input() {
 	echo -ne "${INPUT}" >> "${FPROMPT}"
 	echo -ne "${INST_END}" >> "${FPROMPT}"
 	echo -ne "${REPL_START}" >> "${FPROMPT}"
+	echo -ne "# USER:\n${INPUT}\n" >> "${FCHAT}"
 
 }
 
@@ -101,58 +122,38 @@ init_prompt() {
 
 spit_predict() {
 	PROG_P=(--prompt-cache "${FCACHE}"
-		--mlock
-		--prompt-cache-all
+		--cache_prompt true
 		--file "${FPROMPT}"
-		--predict -2
-		--simple-io
-		"${REV_PROMPTS[@]}"
-		--no-display-prompt)
-
+		--n_predict -1
+		"${REV_PROMPTS[@]}")
+	if [ "${PREFIX}" ]; then
+		if [ "$(tail -c ${#PREFIX} "${FCHAT}")" != "${PREFIX}" ]; then
+			echo -ne "${PREFIX}" >> "${FCHAT}"
+		fi
+	fi
 	if [ "${DEBUG}" ]; then
-		echo -n "RUNNING: ${PROG[@]} ${PROG_P[@]}"
-		${PROG} "${PROG_P[@]}" 2> "${FLOG}" | tee -a "${FPROMPT}"
+		${PROG} "${PROG_P[@]}" 2> "${FLOG}" | tee -a "${FPROMPT}" "${FCHAT}"
 		[ "${PIPESTATUS[0]}" -ne "0" ] && exit_fail_log ${PIPESTATUS[0]}
 	else
-		${PROG} "${PROG_P[@]}" 2> "${FLOG}" | tee -a "${FPROMPT}"
+		${PROG} "${PROG_P[@]}" 2> "${FLOG}" | tee -a "${FPROMPT}" "${FCHAT}" |\
+			render.sh SPEAK
 		[ "${PIPESTATUS[0]}" -ne "0" ] && exit_fail_log ${PIPESTATUS[0]}
 	fi
 
 	PROMPT="$(cat "${FPROMPT}")"
-
-	mv ./main.log "${DIR}"
-
+	[ "$(tail -c 1 "${FCHAT}")" != $'\n' ] && echo >> "${FCHAT}"
 }
 
-spit_cache() {
-	if [ "${BOS}" ]; then
-		cp "${FPROMPT}" "${FPROMPT}_tmp"
-		echo -ne "${BOS}" >> "${FPROMPT}"
-	fi
-
-	PROG_P=(--prompt-cache "${FCACHE}"
-		--mlock
-		--prompt-cache-all
-		--file "${FPROMPT}"
-		--predict 1
-		--simple-io
-		--no-display-prompt)
-
-	if [ "${DEBUG}" ]; then
-		echo -n "RUNNING: ${PROG[@]} ${PROG_P[@]}"
-		${PROG} "${PROG_P[@]}" 2> "${FLOG}" || exit_fail_log ${?}
-	else
-		${PROG} "${PROG_P[@]}" 2> "${FLOG}" > /dev/null || exit_fail_log ${?}
-	fi
-	[ "${1}" ] && mv ./main.log ./${DIR}
-	[ "${BOS}" ] && mv "${FPROMPT}_tmp" "${FPROMPT}"
+_process_stop_sequence() {
+	echo -ne '\n```\n' | tee -a "${FCHAT}"
+	echo -ne '\n```'  | tee -a "${FCHAT}"
 }
 
 process_stop_sequence() {
 	SEQ="$(detect_stop_sequence)"
 	if [ "${SEQ}" ]; then
-		SEQ_START="<${SEQ}>"
-		SEQ_STOP="</${SEQ}>"
+		SEQ_START="$(ID_B ${SEQ})"
+		SEQ_STOP="$(ID_E ${SEQ})"
 		((STEPS=${#PROMPT}-${#SEQ_START}))
 		for STEP in $(seq ${STEPS} -1 0); do
 			((OFFSETL=STEP+${#SEQ_START}))
@@ -170,20 +171,22 @@ process_stop_sequence() {
 		while [ "${EXEC:0:1}" == " " ] || [ "${EXEC:0:1}" == $'\n' ]; do
 			EXEC="${EXEC:1}"
 		done
-		"${SEQ}" "${EXEC}" | tee -a "${FPROMPT}"
+		echo -ne "${TOOL_START}" | tee -a "${FPROMPT}" >> "${FCHAT}"
+		"${SEQ}" "${EXEC}" | tee -a "${FPROMPT}" "${FCHAT}"
+		echo -ne "${TOOL_END}" | tee -a  "${FPROMPT}" >> "${FCHAT}"
 		PROMPT="$(cat "${FPROMPT}")"
 	fi
 }
 
 stop_on_sequences() {
 	for EACH in ${STOP_SEQUENCES[@]}; do
-		REV_PROMPTS=(${REV_PROMPTS[@]} --reverse-prompt "</${EACH}>")
+		REV_PROMPTS=(${REV_PROMPTS[@]} --stop "$(ID_E ${EACH})")
 	done
 }
 
 detect_stop_sequence() {
 	for EACH in ${STOP_SEQUENCES[@]}; do
-		_EACH="</${EACH}>"
+		_EACH="$(ID_E ${EACH})"
 		((OFFSETD=${#PROMPT}-${#_EACH}))
 		if [ "${PROMPT:${OFFSETD}:${#_EACH}}" == "${_EACH}" ]; then
 			echo "${EACH}"
@@ -192,14 +195,14 @@ detect_stop_sequence() {
 	done
 }
 
-stop_on_eos_token() {
-	[ "${EOS}" ] && REV_PROMPTS=(${REV_PROMPTS[@]} --reverse-prompt ${EOS})
+stop_on_eot_token() {
+	[ "${EOT}" ] && REV_PROMPTS=(${REV_PROMPTS[@]} --stop "${EOT}")
 }
 
-remove_eos_token() {
-	if [ "${EOS}" ]; then
-		((OFFSETR=${#PROMPT}-${#EOS}))
-		if [ "${PROMPT:${OFFSETR}:${#EOS}}" == "${EOS}" ]; then
+remove_eot_token() {
+	if [ "${EOT}" ]; then
+		((OFFSETR=${#PROMPT}-${#EOT}))
+		if [ "${PROMPT:${OFFSETR}:${#EOT}}" == "${EOT}" ]; then
 			PROMPT="${PROMPT:0:${OFFSETR}}"
 			return 0
 		fi
@@ -229,69 +232,74 @@ LLAMA="$(return_1 ${PROG})"
 [ ! "${PROG}" ] && exit_fail "PROG not set!" 1
 [ ! "$(which ${LLAMA})" ] && exit_fail "${LLAMA} not found!" 1
 
-[ "${EOS}" ] && stop_on_eos_token
+[ "${EOT}" ] && stop_on_eot_token
 stop_on_sequences
 
 INTERACTIVE=1
 [ "${INPUT}" ] && INTERACTIVE=
 
 FPROMPT="./prompt_${SID}"
-FCACHE="./cache_${SID}"
+#FCACHE="./cache_${SID}"
 FLOG="./log_${SID}"
-if [ ! -e "${FCACHE}" ] && [ "${SYSTEM}${CHAT[0]}" ]; then
-	[ "${INTERACTIVE}" ] && echo "caching..."
+if [ ! -e "${FPROMPT}" ] && [ "${SYSTEM}${CHAT[0]}" ]; then
 	init_prompt
-	spit_cache
 fi
 [ ! "${SYSTEM}" ] && touch "${FPROMPT}"
 
 OFPROMPT="${FPROMPT}"
-OFCACHE="${FCACHE}"
+#OFCACHE="${FCACHE}"
 OFLOG="${FLOG}"
 
+FCHAT="./${DIR}/chat"
 FPROMPT="./${DIR}/prompt"
-FCACHE="./${DIR}/cache"
+#FCACHE="./${DIR}/cache"
 FLOG="./${DIR}/log"
 FINPUT="./${DIR}/input"
 
 [ ! -d "./${DIR}" ] && mkdir "${DIR}"
 [ ! -e "${FPROMPT}" ] && [ -e "${OFPROMPT}" ] && cp "${OFPROMPT}" "${FPROMPT}"
-[ ! -e "${FCACHE}" ] && [ -e "${OFCACHE}" ] && cp "${OFCACHE}" "${FCACHE}"
+#[ ! -e "${FCACHE}" ] && [ -e "${OFCACHE}" ] && cp "${OFCACHE}" "${FCACHE}"
 [ ! -e "${FLOG}" ] && [ -e "${OFLOG}" ] && cp "${OFLOG}" "${FLOG}"
+[ ! -e "${FCHAT}" ] && touch "${FCHAT}"
 
 TCOUNT=0
-
-[ "${INTERACTIVE}" ] && clear && cat "${FPROMPT}"
+interactive_display
 
 while true; do
-	if [ "${INTERACTIVE}" ]; then
-		read_input
-	elif [ -e "${FINPUT}" ]; then
-		INPUT="$(cat "${FINPUT}")"
-	fi
-
-	if [ ! "${INPUT}" ]; then
-		[ "$(type RUN_ON_EXIT 2> /dev/null | grep "is a function")" ] && RUN_ON_EXIT
-		exit 0
-	fi
-
-	if [ "${INTERACTIVE}" ] && [ "${INPUT}" == "<file" ]; then
-		if [ ! -e "${FINPUT}" ]; then
-			echo "ERROR: ${FINPUT} not found!"
-		else
+	if [ ! "${CONTINUE}" ]; then
+		if [ "${INTERACTIVE}" ]; then
+			read_input
+		elif [ -e "${FINPUT}" ]; then
 			INPUT="$(cat "${FINPUT}")"
 		fi
+	
+		if [ ! "${INPUT}" ]; then
+			[ "$(type RUN_ON_EXIT 2> /dev/null | grep "is a function")" ] && RUN_ON_EXIT
+			exit 0
+		fi
+	
+		if [ "${INTERACTIVE}" ] && [ "${INPUT}" == "<file" ]; then
+			if [ ! -e "${FINPUT}" ]; then
+				echo "ERROR: ${FINPUT} not found!"
+			else
+				INPUT="$(cat "${FINPUT}")"
+			fi
+		fi
+		save_input
+		interactive_display
+		INPUT=
 	fi
-	save_input
-	[ "${INTERACTIVE}" ] && clear && cat "${FPROMPT}"
-	INPUT=
+	CONTINUE=
 
+	[ "$(tail -c 16 "${FCHAT}")" != "# ASSISTANT:" ] && \
+		echo -ne "\n# ASSISTANT: " >> "${FCHAT}"
+	[ "${INTERACTIVE}" ] && echo -n "# ASSISTANT: " | lowdown -tterm
 	while true; do
 		cp "${FPROMPT}" "${FPROMPT}_last"
 		spit_predict
 		rm -f "${FINPUT}"
 
-		if remove_eos_token; then
+		if remove_eot_token; then
 			echo -ne "${PROMPT}" > "${FPROMPT}"
 			break
 		fi
@@ -301,9 +309,9 @@ while true; do
 			break
 		fi
 	done
-
+	echo >> "${FCHAT}"
 	echo -ne "${REPL_END}" >> "${FPROMPT}"
-	[ "${INTERACTIVE}" ] && clear && cat "${FPROMPT}"
+	interactive_display
 
 	if [ ! "${INTERACTIVE}" ]; then
 		[ "$(type RUN_ON_EXIT 2> /dev/null | grep "is a function")" ] && RUN_ON_EXIT
