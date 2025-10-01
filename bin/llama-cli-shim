@@ -1,0 +1,90 @@
+#!/bin/bash
+
+exit_fail() {
+	echo "${1}"
+	exit ${2}
+}
+
+options() {
+	COUNT=1
+	for OPTION in "${@}"; do
+		((COUNT++))
+		[ "${OPTION}" == "--url" ] && URL="${@:${COUNT}:1}" &&\
+			LCOUNT="${COUNT}" && continue
+		[ "${OPTION}" == "--file" ] && FILE="${@:${COUNT}:1}" &&\
+			LCOUNT="${COUNT}" && continue
+		[ "${OPTION}" == "--temperature" ] && TEMPERATURE="${@:${COUNT}:1}" &&\
+			LCOUNT="${COUNT}" && continue
+		[ "${OPTION}" == "--top_k" ] && TOP_K="${@:${COUNT}:1}" &&\
+			LCOUNT="${COUNT}" && continue
+		[ "${OPTION}" == "--top_p" ] && TOP_P="${@:${COUNT}:1}" &&\
+			LCOUNT="${COUNT}" && continue
+		[ "${OPTION}" == "--n_predict" ] && N_PREDICT="${@:${COUNT}:1}" &&\
+			LCOUNT="${COUNT}" && continue
+		[ "${OPTION}" == "--cache_prompt" ] && CACHE_PROMPT="${@:${COUNT}:1}" &&\
+			LCOUNT="${COUNT}" && continue
+		[ "${OPTION}" == "--stop" ] && STOP+=("${@:${COUNT}:1}") &&\
+			LCOUNT="${COUNT}" && continue
+		[ "${OPTION}" == "--auth" ] && API_KEY="${@:${COUNT}:1}" &&\
+			LCOUNT="${COUNT}" && continue
+	done
+	((LCOUNT++))
+	INPUT="${@:${LCOUNT}}"
+}
+
+stop_array() {
+	echo -n "["
+	[ "${STOP[0]}" ] && echo -n "\"\n${STOP[0]}"
+	COUNT=1
+	while [ "${STOP[${COUNT}]}" ]; do
+		echo -n "\", \"\n${STOP[${COUNT}]}"
+		((COUNT++))
+	done
+	[ "${STOP[0]}" ] && echo -n "\""
+	echo -n "]"
+}
+
+options "${@}"
+
+[ ! "${FILE}" ] && exit_fail "--file argument mandatory!" 1
+[ ! "${URL}" ] && exit_fail "--url argument mandatory!" 1
+[ ! -e "${FILE}" ] && exit_fail "${FILE} not found!" 1
+[ ! "${TEMPERATURE}" ] && TEMPERATURE=0.6
+[ ! "${TOP_K}" ] && TOP_K=20
+[ ! "${TOP_P}" ] && TOP_P=0.9
+[ ! "${N_PREDICT}" ] && N_PREDICT=-1
+[ ! "${CACHE_PROMPT}" ] && CACHE_PROMPT=false
+
+REQUEST="{
+	prompt: .,
+	temperature: ${TEMPERATURE},
+	top_k: ${TOP_K},
+	top_p: ${TOP_P},
+	n_predict: ${N_PREDICT},
+	cache_prompt: ${CACHE_PROMPT},
+	stop: $(stop_array),
+	stream: true
+	}"
+
+PROMPT="$(cat ${FILE})"
+DATA="$(echo -n "$PROMPT" | jq -Rs "${REQUEST}")"
+
+echo -n "${REQUEST}" > "${FILE}.request"
+echo -n "${DATA}" > "${FILE}.data"
+echo -n > "${FILE}.response"
+
+curl --silent --no-buffer --request POST \
+	--url "${URL}/completion" \
+	--header "Content-Type: application/json" \
+	--header "Authorization: Bearer ${API_KEY}" \
+	--data-raw "${DATA}" \
+| while IFS= read -r LINE; do
+	echo "${LINE}" >> "${FILE}.response"
+	if [[ $LINE = data:* ]]; then
+		CONTENT="$(echo "${LINE:5}" | jq -r '.content')"
+		printf "%s" "${CONTENT}"
+		STOPWORD="$(echo "${LINE:5}" | jq -r '.stopping_word')"
+		[ "${STOPWORD}" != "null" ] && echo -ne "${STOPWORD}"
+	fi
+done
+
