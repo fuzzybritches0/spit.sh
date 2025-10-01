@@ -1,5 +1,9 @@
 # spit.sh
 
+# ARCHIVED
+This repository is no longer actively maintained!
+Please see https://github.com/fuzzybritches0/spit.py for a much better alternative.
+
 This script let's you chat with Large Language Models (gguf format) on the console using the great llama.cpp by Georgi Gerganov <https://github.com/ggerganov/llama.cpp>.
 
 ```
